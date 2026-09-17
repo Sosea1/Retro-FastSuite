@@ -18,13 +18,13 @@ FastSuite complements a crafting cache: the cache handles repeated identical inp
 
 Measured in a modpack with 24,325 registered recipes. Each cell used 200 warmup runs and 1,000 measured lookups.
 
-| Crafting input | All matches | First match |
-|---|---:|---:|
-| Acacia planks | 14.89x | 4.20x |
-| Sticks | 14.71x | 2.07x |
-| Crafting table | 16.60x | 4.40x |
-| Black shulker box | 16.68x | 0.86x |
-| No matching recipe | 16.12x | 23.01x |
+| Crafting input | All matches, Retro / vanilla | Speedup | First match, Retro / vanilla | Speedup |
+|---|---:|---:|---:|---:|
+| Acacia planks | 520.19 / 7,743.59 µs | 14.89x | 11.59 / 48.64 µs | 4.20x |
+| Sticks | 567.16 / 8,343.35 µs | 14.71x | 2.43 / 5.04 µs | 2.07x |
+| Crafting table | 431.73 / 7,165.15 µs | 16.60x | 4.84 / 21.30 µs | 4.40x |
+| Black shulker box | 467.59 / 7,798.17 µs | 16.68x | 1.45 / 1.24 µs | 0.86x |
+| No matching recipe | 711.77 / 11,476.92 µs | 16.12x | 533.79 / 12,280.99 µs | 23.01x |
 
 The numbers compare FastSuite with Forge's normal linear recipe scan. One small first-match case was slower; the main benefit is visible on all-match queries and failed lookups in large registries.
 
