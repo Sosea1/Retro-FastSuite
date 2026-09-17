@@ -178,10 +178,12 @@ public final class RecipeSafetyClassifier {
                                                               Class<?> trustedBase,
                                                               Class<?> returnType,
                                                               Class<?>... parameterTypes) {
-        Method actual = findPublicMethodBySignature(actualClass, returnType, parameterTypes);
         Method trusted = findPublicMethodBySignature(trustedBase, returnType, parameterTypes);
+        if (trusted == null) return false;
+
+        Method actual = findPublicMethodByNameAndParameters(
+            actualClass, trusted.getName(), parameterTypes);
         return actual != null
-            && trusted != null
             && actual.getDeclaringClass() == trusted.getDeclaringClass();
     }
 
@@ -205,13 +207,21 @@ public final class RecipeSafetyClassifier {
                 }
                 if (!same) continue;
 
-                if (found != null && found.getDeclaringClass() != method.getDeclaringClass()) {
-                    return null;
-                }
+                if (found != null) return null;
                 found = method;
             }
             return found;
         } catch (LinkageError | SecurityException ignored) {
+            return null;
+        }
+    }
+
+    private static Method findPublicMethodByNameAndParameters(Class<?> owner,
+                                                               String methodName,
+                                                               Class<?>... parameterTypes) {
+        try {
+            return owner.getMethod(methodName, parameterTypes);
+        } catch (NoSuchMethodException | LinkageError | SecurityException ignored) {
             return null;
         }
     }
