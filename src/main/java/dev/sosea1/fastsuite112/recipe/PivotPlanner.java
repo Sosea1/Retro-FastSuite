@@ -23,7 +23,7 @@ final class PivotPlanner {
         for (int recipeId = 0; recipeId < analyses.size(); recipeId++) {
             RecipeAnalysis analysis = analyses.get(recipeId);
             if (!analysis.isIndexable()) continue;
-            assignments[recipeId] = choosePivot(analysis, potentialRecipeFrequency, diagnostics).candidateIndex;
+            assignments[recipeId] = choosePivot(analysis, potentialRecipeFrequency, diagnostics);
         }
 
         if (!loadBalanced) return new Result(assignments, diagnostics.freeze());
@@ -75,11 +75,9 @@ final class PivotPlanner {
         return new Result(assignments, diagnostics.freeze());
     }
 
-    private static PivotSelection choosePivot(RecipeAnalysis analysis,
-                                              Map<Item, Integer> potentialRecipeFrequency,
-                                              DiagnosticsAccumulator diagnostics) {
-        Item[] bestItems = null;
-        Item[] naiveItems = null;
+    private static int choosePivot(RecipeAnalysis analysis,
+                                   Map<Item, Integer> potentialRecipeFrequency,
+                                   DiagnosticsAccumulator diagnostics) {
         int bestIndex = -1;
         int naiveIndex = -1;
         int naiveItemCount = Integer.MAX_VALUE;
@@ -88,18 +86,17 @@ final class PivotPlanner {
         int bestAlternativeCount = Integer.MAX_VALUE;
         int naiveWorstSupport = Integer.MAX_VALUE;
 
-        for (int candidateIndex = 0; candidateIndex < analysis.pivotCandidates.size(); candidateIndex++) {
-            Item[] items = analysis.pivotCandidates.get(candidateIndex);
+        for (int candidateIndex = 0; candidateIndex < analysis.candidateRoutings.size(); candidateIndex++) {
+            Item[] items = analysis.candidateRoutings.get(candidateIndex).items;
             PivotCost cost = pivotCost(items, potentialRecipeFrequency);
 
             if (items.length < naiveItemCount) {
-                naiveItems = items;
                 naiveIndex = candidateIndex;
                 naiveItemCount = items.length;
                 naiveWorstSupport = cost.worstSupport;
             }
 
-            if (bestItems == null || PivotScoring.isBetter(
+            if (bestIndex < 0 || PivotScoring.isBetter(
                 cost.worstSupport,
                 cost.totalSupport,
                 items.length,
@@ -107,7 +104,6 @@ final class PivotPlanner {
                 bestTotalSupport,
                 bestAlternativeCount
             )) {
-                bestItems = items;
                 bestIndex = candidateIndex;
                 bestWorstSupport = cost.worstSupport;
                 bestTotalSupport = cost.totalSupport;
@@ -115,16 +111,16 @@ final class PivotPlanner {
             }
         }
 
-        if (bestItems == null || naiveItems == null) {
+        if (bestIndex < 0 || naiveIndex < 0) {
             throw new IllegalStateException("Indexable recipe analysis has no pivot candidates");
         }
 
         boolean frequencyAware = FastSuiteConfig.frequencyAwarePivotSelection;
-        Item[] selectedItems = frequencyAware ? bestItems : naiveItems;
         int selectedIndex = frequencyAware ? bestIndex : naiveIndex;
         diagnostics.recordPivotChoice(
-            bestIndex != naiveIndex, naiveWorstSupport, bestWorstSupport, selectedItems.length);
-        return PivotSelection.indexed(selectedItems, selectedIndex);
+            bestIndex != naiveIndex, naiveWorstSupport, bestWorstSupport,
+            analysis.candidateRoutings.get(selectedIndex).items.length);
+        return selectedIndex;
     }
 
     private static PivotCost pivotCost(Item[] items, Map<Item, Integer> potentialRecipeFrequency) {
@@ -204,20 +200,6 @@ final class PivotPlanner {
                 pivotChoices, frequencyAwareChoiceChanges, naiveWorstSupportTotal,
                 frequencyAwareWorstSupportTotal, selectedPivotMaxAlternatives,
                 passes, changes, maximumQueryLoad);
-        }
-    }
-
-    private static final class PivotSelection {
-        private final Item[] items;
-        private final int candidateIndex;
-
-        private PivotSelection(Item[] items, int candidateIndex) {
-            this.items = items;
-            this.candidateIndex = candidateIndex;
-        }
-
-        private static PivotSelection indexed(Item[] items, int candidateIndex) {
-            return new PivotSelection(items, candidateIndex);
         }
     }
 

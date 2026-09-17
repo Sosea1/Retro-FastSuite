@@ -2,7 +2,6 @@ package dev.sosea1.fastsuite112.recipe;
 
 import dev.sosea1.fastsuite112.recipe.RecipeIndex.FallbackReason;
 import dev.sosea1.fastsuite112.recipe.RecipeSafetyClassifier.Safety;
-import net.minecraft.item.Item;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.item.crafting.Ingredient;
 import net.minecraft.item.crafting.ShapedRecipes;
@@ -81,7 +80,6 @@ final class RecipeAnalyzer {
             && ingredients.size() <= 63;
         long shapeOccupancyMask = 0L;
 
-        List<Item[]> pivotCandidates = new ArrayList<Item[]>();
         List<CandidateRouting> candidateRoutings = new ArrayList<CandidateRouting>();
         List<Integer> candidateIngredientIndices = new ArrayList<Integer>();
         List<Boolean> advancedCandidateSafe = new ArrayList<Boolean>();
@@ -121,7 +119,6 @@ final class RecipeAnalyzer {
             CandidateRouting routing = IngredientRoutingCompiler.compile(
                 ingredient, ingredientSafety != Safety.API_OVERRIDE);
             if (routing.items.length != 0) {
-                pivotCandidates.add(routing.items);
                 candidateRoutings.add(routing);
                 candidateIngredientIndices.add(ingredientIndex);
                 advancedCandidateSafe.add(ingredientSafety != Safety.API_OVERRIDE);
@@ -130,7 +127,7 @@ final class RecipeAnalyzer {
             }
         }
 
-        if (pivotCandidates.isEmpty()) {
+        if (candidateRoutings.isEmpty()) {
             if (!sawNonEmptyIngredient) return RecipeAnalysis.fallback(FallbackReason.NO_INGREDIENTS);
             if (sawUnknownIngredient) return RecipeAnalysis.fallback(
                 FallbackReason.NO_SAFE_PIVOT, firstUnknownIngredientClass);
@@ -141,7 +138,6 @@ final class RecipeAnalyzer {
             ? ShapeOccupancy.mirror(shapeOccupancyMask, shapeWidth, shapeHeight)
             : 0L;
         return RecipeAnalysis.indexable(
-            pivotCandidates,
             candidateRoutings,
             candidateIngredientIndices,
             advancedCandidateSafe,

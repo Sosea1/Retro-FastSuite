@@ -27,8 +27,7 @@ final class PivotPlannerTest {
         Item common = new Item();
         Item rare = new Item();
         RecipeAnalysis analysis = analysis(
-            new Item[] { common }, routing(common),
-            new Item[] { rare }, routing(rare));
+            routing(common), routing(rare));
         Map<Item, Integer> frequencies = frequencies(common, 50, rare, 1);
 
         boolean previous = FastSuiteConfig.frequencyAwarePivotSelection;
@@ -52,11 +51,9 @@ final class PivotPlannerTest {
         Item expensiveAlternative = new Item();
         List<RecipeAnalysis> analyses = Arrays.asList(
             analysis(
-                new Item[] { first }, routing(first),
-                new Item[] { first, expensiveAlternative }, routing(first, expensiveAlternative)),
+                routing(first), routing(first, expensiveAlternative)),
             analysis(
-                new Item[] { first }, routing(first),
-                new Item[] { second }, routing(second)));
+                routing(first), routing(second)));
         Map<Item, Integer> frequencies = frequencies(
             first, 1, second, 1, expensiveAlternative, 100);
 
@@ -78,8 +75,7 @@ final class PivotPlannerTest {
         Item first = new Item();
         Item second = new Item();
         RecipeAnalysis analysis = analysis(
-            new Item[] { first }, routing(first),
-            new Item[] { second }, routing(second));
+            routing(first), routing(second));
 
         boolean previous = FastSuiteConfig.frequencyAwarePivotSelection;
         FastSuiteConfig.frequencyAwarePivotSelection = true;
@@ -93,12 +89,9 @@ final class PivotPlannerTest {
         }
     }
 
-    private static RecipeAnalysis analysis(Item[] firstItems,
-                                           CandidateRouting firstRouting,
-                                           Item[] secondItems,
+    private static RecipeAnalysis analysis(CandidateRouting firstRouting,
                                            CandidateRouting secondRouting) {
         return RecipeAnalysis.indexable(
-            Arrays.asList(firstItems, secondItems),
             Arrays.asList(firstRouting, secondRouting),
             Arrays.asList(0, 1), Arrays.asList(true, true), Safety.TRUSTED_BASE,
             0, 0, 0, 0L, 0L);

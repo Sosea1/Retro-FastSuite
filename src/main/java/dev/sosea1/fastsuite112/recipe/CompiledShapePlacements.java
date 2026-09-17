@@ -41,17 +41,20 @@ final class CompiledShapePlacements {
     static CompiledShapePlacements compile(@Nullable byte[] shapeWidth,
                                            @Nullable byte[] shapeHeight,
                                            @Nullable long[] shapeMask,
-                                           @Nullable long[] mirroredShapeMask) {
-        if (shapeWidth == null || shapeHeight == null || shapeMask == null || mirroredShapeMask == null) {
+                                           @Nullable long[] mirroredShapeMask,
+                                           @Nullable byte[] positionalProbeCount) {
+        if (shapeWidth == null || shapeHeight == null || shapeMask == null || mirroredShapeMask == null
+            || positionalProbeCount == null) {
             return EMPTY;
         }
         int size = shapeWidth.length;
-        if (shapeHeight.length != size || shapeMask.length != size || mirroredShapeMask.length != size) {
+        if (shapeHeight.length != size || shapeMask.length != size || mirroredShapeMask.length != size
+            || positionalProbeCount.length != size) {
             throw new IllegalArgumentException("Mismatched shape constraint columns");
         }
         boolean anyShape = false;
-        for (byte width : shapeWidth) {
-            if ((width & 0xff) != 0) {
+        for (int id = 0; id < size; id++) {
+            if ((shapeWidth[id] & 0xff) != 0 && (positionalProbeCount[id] & 0xff) == 0) {
                 anyShape = true;
                 break;
             }
@@ -66,6 +69,7 @@ final class CompiledShapePlacements {
         LongBuilder masks3 = new LongBuilder();
 
         for (int id = 0; id < size; id++) {
+            if ((positionalProbeCount[id] & 0xff) != 0) continue;
             int width = shapeWidth[id] & 0xff;
             int height = shapeHeight[id] & 0xff;
             if (width == 0 || height == 0) continue;

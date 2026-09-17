@@ -8,6 +8,42 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 final class ConstraintTableTest {
 
     @Test
+    void reportsOnlyQueryFeaturesUsedByFrozenConstraints() {
+        ConstraintTable occupiedOnly = ConstraintTable.freeze(new RecipeConstraint[] {
+            RecipeConstraint.builder().occupiedSlots(1).build()
+        });
+        assertFalse(occupiedOnly.needsItemFingerprints());
+        assertFalse(occupiedOnly.needsVariantFingerprints());
+        assertFalse(occupiedOnly.needsCountSketch());
+        assertFalse(occupiedOnly.needsShapeOccupancy());
+
+        ConstraintTable itemSignature = ConstraintTable.freeze(new RecipeConstraint[] {
+            RecipeConstraint.builder().requiredItems(1L, 2L).build()
+        });
+        assertTrue(itemSignature.needsItemFingerprints());
+        assertFalse(itemSignature.needsVariantFingerprints());
+        assertFalse(itemSignature.needsCountSketch());
+
+        ConstraintTable variantSignature = ConstraintTable.freeze(new RecipeConstraint[] {
+            RecipeConstraint.builder().requiredVariants(4L, 8L).build()
+        });
+        assertFalse(variantSignature.needsItemFingerprints());
+        assertTrue(variantSignature.needsVariantFingerprints());
+
+        ConstraintTable repeated = ConstraintTable.freeze(new RecipeConstraint[] {
+            RecipeConstraint.builder().repeatedRequirement(0, 1, 2, 2).build()
+        });
+        assertTrue(repeated.needsCountSketch());
+        assertFalse(repeated.needsItemFingerprints());
+        assertFalse(repeated.needsVariantFingerprints());
+
+        ConstraintTable shaped = ConstraintTable.freeze(new RecipeConstraint[] {
+            RecipeConstraint.builder().shape(1, 1, 1L, 1L).build()
+        });
+        assertTrue(shaped.needsShapeOccupancy());
+    }
+
+    @Test
     void frozenTableCombinesOccupiedPresenceAndRepeatedRequirements() {
         RecipeConstraint constraint = RecipeConstraint.builder()
             .occupiedSlots(2)

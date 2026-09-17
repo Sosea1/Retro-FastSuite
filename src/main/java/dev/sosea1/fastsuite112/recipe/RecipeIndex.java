@@ -152,11 +152,21 @@ public final class RecipeIndex {
         final int inventorySize = inventory.getSizeInventory();
         final int gridWidth = inventory.getWidth();
         final int gridHeight = inventory.getHeight();
+        final boolean advancedPruning = FastSuiteConfig.advancedCandidatePruning
+            && snapshot.constraints.hasAny();
+        final boolean itemFingerprintsNeeded = advancedPruning
+            && snapshot.constraints.needsItemFingerprints();
+        final boolean variantFingerprintsNeeded = advancedPruning
+            && snapshot.constraints.needsVariantFingerprints();
+        final boolean countSketchNeeded = advancedPruning
+            && snapshot.constraints.needsCountSketch();
+        final boolean shapeOccupancyNeeded = advancedPruning
+            && snapshot.constraints.needsShapeOccupancy();
         final boolean occupancyMaskValid = gridWidth > 0
             && gridHeight > 0
             && (long) gridWidth * (long) gridHeight == inventorySize
             && inventorySize <= 63;
-        final boolean positionalTokensValid = FastSuiteConfig.advancedCandidatePruning
+        final boolean positionalTokensValid = advancedPruning
             && snapshot.constraints.hasPositionalProbes()
             && occupancyMaskValid
             && ((gridWidth == 2 && gridHeight == 2) || (gridWidth == 3 && gridHeight == 3));
@@ -165,22 +175,33 @@ public final class RecipeIndex {
         long querySlotTokens1 = 0L;
         int querySlotToken8 = 0;
 
-        // One grid walk feeds every hot-path filter: metadata-aware primary buckets, separated
-        // Item/exact-variant fingerprints, a two-way saturating Item-count sketch, occupied-slot
-        // count, and shaped occupancy. No HashSet/List is allocated for the query itself.
+        // One grid walk feeds primary routing and only the enabled second-stage filters.
+        // No HashSet/List is allocated for the query itself.
         for (int slot = 0; slot < inventorySize; slot++) {
             ItemStack stack = inventory.getStackInSlot(slot);
             if (stack.isEmpty()) continue;
 
             occupiedSlots++;
-            if (occupancyMaskValid) queryOccupancyMask |= 1L << slot;
+            if (shapeOccupancyNeeded && occupancyMaskValid) queryOccupancyMask |= 1L << slot;
 
             Item item = stack.getItem();
             int metadata = stack.getMetadata();
-            long itemBitA = MandatoryStackConstraint.presenceBitA(item);
-            long itemBitB = MandatoryStackConstraint.presenceBitB(item);
-            long variantBitA = MandatoryStackConstraint.exactVariantBitA(item, metadata);
-            long variantBitB = MandatoryStackConstraint.exactVariantBitB(item, metadata);
+            long itemBitA = 0L;
+            long itemBitB = 0L;
+            if (itemFingerprintsNeeded) {
+                itemBitA = MandatoryStackConstraint.presenceBitA(item);
+                itemBitB = MandatoryStackConstraint.presenceBitB(item);
+                queryItemMaskA |= itemBitA;
+                queryItemMaskB |= itemBitB;
+            }
+            long variantBitA = 0L;
+            long variantBitB = 0L;
+            if (variantFingerprintsNeeded) {
+                variantBitA = MandatoryStackConstraint.exactVariantBitA(item, metadata);
+                variantBitB = MandatoryStackConstraint.exactVariantBitB(item, metadata);
+                queryVariantMaskA |= variantBitA;
+                queryVariantMaskB |= variantBitB;
+            }
             if (positionalTokensValid) {
                 int compactToken = ConstraintCompiler.compactQueryToken(itemBitA, itemBitB, variantBitA, variantBitB);
                 if (slot < 4) {
@@ -191,12 +212,12 @@ public final class RecipeIndex {
                     querySlotToken8 = compactToken;
                 }
             }
-            queryItemMaskA |= itemBitA;
-            queryItemMaskB |= itemBitB;
-            queryVariantMaskA |= variantBitA;
-            queryVariantMaskB |= variantBitB;
-            queryCountSketchA = SaturatingCountSketch.increment(queryCountSketchA, ConstraintCompiler.countSketchIndexA(item));
-            queryCountSketchB = SaturatingCountSketch.increment(queryCountSketchB, ConstraintCompiler.countSketchIndexB(item));
+            if (countSketchNeeded) {
+                queryCountSketchA = SaturatingCountSketch.increment(
+                    queryCountSketchA, ConstraintCompiler.countSketchIndexA(item));
+                queryCountSketchB = SaturatingCountSketch.increment(
+                    queryCountSketchB, ConstraintCompiler.countSketchIndexB(item));
+            }
 
             ItemPivotBucket pivot = snapshot.pivotBuckets.get(item);
             if (pivot == null) continue;
@@ -245,7 +266,7 @@ public final class RecipeIndex {
         final long queryMatchMaskA = queryItemMaskA | queryVariantMaskA;
         final long queryMatchMaskB = queryItemMaskB | queryVariantMaskB;
 
-        if (!FastSuiteConfig.advancedCandidatePruning || !snapshot.constraints.hasAny()) {
+        if (!advancedPruning) {
             if (unionBuckets == null) {
                 return snapshot.fallbackRecipeIds.length == 0
                     ? firstBucket
@@ -259,8 +280,8 @@ public final class RecipeIndex {
             );
         }
 
-        final int queryGridWidth = occupancyMaskValid ? gridWidth : 0;
-        final int queryGridHeight = occupancyMaskValid ? gridHeight : 0;
+        final int queryGridWidth = shapeOccupancyNeeded && occupancyMaskValid ? gridWidth : 0;
+        final int queryGridHeight = shapeOccupancyNeeded && occupancyMaskValid ? gridHeight : 0;
         if (unionBuckets == null) {
             return new FilteredSingleBucketIterable(
                 snapshot.recipesById,
@@ -412,8 +433,8 @@ public final class RecipeIndex {
                 // Count each Item at most once per recipe. This is an upper-bound estimate of how
                 // many recipes an Item can attract if chosen as a pivot anywhere in the registry.
                 Set<Item> recipePotentialItems = IdentityCollections.newIdentitySet();
-                for (Item[] candidate : analysis.pivotCandidates) {
-                    Collections.addAll(recipePotentialItems, candidate);
+                for (CandidateRouting routing : analysis.candidateRoutings) {
+                    Collections.addAll(recipePotentialItems, routing.items);
                 }
                 for (Item item : recipePotentialItems) {
                     Integer current = potentialRecipeFrequency.get(item);
@@ -455,7 +476,7 @@ public final class RecipeIndex {
             }
 
             int selectedPivotIndex = pivotAssignments[recipeId];
-            if (selectedPivotIndex < 0 || selectedPivotIndex >= analysis.pivotCandidates.size()) {
+            if (selectedPivotIndex < 0 || selectedPivotIndex >= analysis.candidateRoutings.size()) {
                 throw new IllegalStateException("Missing pivot assignment for indexed recipe " + recipeId);
             }
             RecipeConstraint constraint = ConstraintCompiler.compile(

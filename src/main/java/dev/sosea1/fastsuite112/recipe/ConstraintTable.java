@@ -17,11 +17,21 @@ final class ConstraintTable {
     private static final int FLAG_SHAPE = 1 << 6;
     private static final int FLAG_POSITIONAL = 1 << 7;
 
-    static final ConstraintTable EMPTY = new ConstraintTable(0, null, null, null, null, null, null,
-        null, null, null, null, null, null, null, null, null, null, CompiledShapePlacements.EMPTY,
-        CompiledPositionalProbes.EMPTY, null, null, null, null, null, null);
+    private static final int QUERY_ITEM_FINGERPRINTS = 1;
+    private static final int QUERY_VARIANT_FINGERPRINTS = 1 << 1;
+    private static final int QUERY_COUNT_SKETCH = 1 << 2;
+    private static final int QUERY_SHAPE_OCCUPANCY = 1 << 3;
+
+    static final ConstraintTable EMPTY = new ConstraintTable(0, 0,
+        null, null,
+        null, null, null, null, null, null,
+        null, null, null, null,
+        null, null, null, null,
+        CompiledShapePlacements.EMPTY, CompiledPositionalProbes.EMPTY,
+        null, null, null, null, null, null);
 
     private final int size;
+    private final int queryFeatures;
     @Nullable private final byte[] flags;
     @Nullable private final byte[] occupiedSlots;
     @Nullable private final long[] presenceMaskA1;
@@ -47,7 +57,8 @@ final class ConstraintTable {
     @Nullable private final byte[] repeatedIndexB2;
     @Nullable private final byte[] repeatedCount2;
 
-    private ConstraintTable(int size, @Nullable byte[] flags, @Nullable byte[] occupiedSlots,
+    private ConstraintTable(int size, int queryFeatures,
+                            @Nullable byte[] flags, @Nullable byte[] occupiedSlots,
                             @Nullable long[] presenceMaskA1, @Nullable long[] presenceMaskB1,
                             @Nullable long[] presenceMaskA2, @Nullable long[] presenceMaskB2,
                             @Nullable long[] presenceMaskA3, @Nullable long[] presenceMaskB3,
@@ -60,6 +71,7 @@ final class ConstraintTable {
                             @Nullable byte[] repeatedCount1, @Nullable byte[] repeatedIndexA2,
                             @Nullable byte[] repeatedIndexB2, @Nullable byte[] repeatedCount2) {
         this.size = size;
+        this.queryFeatures = queryFeatures;
         this.flags = flags;
         this.occupiedSlots = occupiedSlots;
         this.presenceMaskA1 = presenceMaskA1;
@@ -96,9 +108,13 @@ final class ConstraintTable {
             }
         }
         if (!any) {
-            return new ConstraintTable(source.length, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, CompiledShapePlacements.EMPTY,
-                CompiledPositionalProbes.EMPTY, null, null, null, null, null, null);
+            return new ConstraintTable(source.length, 0,
+                null, null,
+                null, null, null, null, null, null,
+                null, null, null, null,
+                null, null, null, null,
+                CompiledShapePlacements.EMPTY, CompiledPositionalProbes.EMPTY,
+                null, null, null, null, null, null);
         }
 
         int size = source.length;
@@ -131,6 +147,7 @@ final class ConstraintTable {
         byte[] repeatedIndexA2 = new byte[size];
         byte[] repeatedIndexB2 = new byte[size];
         byte[] repeatedCount2 = new byte[size];
+        int queryFeatures = 0;
 
         for (int id = 0; id < size; id++) {
             RecipeConstraint constraint = source[id];
@@ -148,12 +165,22 @@ final class ConstraintTable {
             if (constraint.presenceMaskA2 != 0L) recipeFlags |= FLAG_PRESENCE_2;
             presenceMaskA3[id] = constraint.presenceMaskA3;
             presenceMaskB3[id] = constraint.presenceMaskB3;
+            if (constraint.presenceMaskA1 != 0L || constraint.presenceMaskA2 != 0L
+                || constraint.presenceMaskA3 != 0L) {
+                queryFeatures |= QUERY_ITEM_FINGERPRINTS | QUERY_VARIANT_FINGERPRINTS;
+            }
             requiredItemMaskA[id] = constraint.requiredItemMaskA;
             requiredItemMaskB[id] = constraint.requiredItemMaskB;
-            if (constraint.requiredItemMaskA != 0L) recipeFlags |= FLAG_ITEM_SIGNATURE;
+            if (constraint.requiredItemMaskA != 0L) {
+                recipeFlags |= FLAG_ITEM_SIGNATURE;
+                queryFeatures |= QUERY_ITEM_FINGERPRINTS;
+            }
             requiredVariantMaskA[id] = constraint.requiredVariantMaskA;
             requiredVariantMaskB[id] = constraint.requiredVariantMaskB;
-            if (constraint.requiredVariantMaskA != 0L) recipeFlags |= FLAG_VARIANT_SIGNATURE;
+            if (constraint.requiredVariantMaskA != 0L) {
+                recipeFlags |= FLAG_VARIANT_SIGNATURE;
+                queryFeatures |= QUERY_VARIANT_FINGERPRINTS;
+            }
             if (constraint.shapeWidth > 0 && constraint.shapeWidth <= 255
                 && constraint.shapeHeight > 0 && constraint.shapeHeight <= 255) {
                 shapeWidth[id] = (byte) constraint.shapeWidth;
@@ -161,6 +188,7 @@ final class ConstraintTable {
                 shapeMask[id] = constraint.shapeMask;
                 mirroredShapeMask[id] = constraint.mirroredShapeMask;
                 recipeFlags |= FLAG_SHAPE;
+                queryFeatures |= QUERY_SHAPE_OCCUPANCY;
                 int probes = Math.min(3, Math.max(0, constraint.positionalProbeCount));
                 if (probes > 0) {
                     positionalProbeCount[id] = (byte) probes;
@@ -171,6 +199,7 @@ final class ConstraintTable {
                     positionalSignature2[id] = constraint.positionalSignature2;
                     positionalSignature3[id] = constraint.positionalSignature3;
                     recipeFlags |= FLAG_POSITIONAL;
+                    queryFeatures |= QUERY_ITEM_FINGERPRINTS | QUERY_VARIANT_FINGERPRINTS;
                 }
             }
             repeatedIndexA1[id] = (byte) Math.max(0, constraint.repeatedIndexA1);
@@ -179,16 +208,19 @@ final class ConstraintTable {
             repeatedIndexA2[id] = (byte) Math.max(0, constraint.repeatedIndexA2);
             repeatedIndexB2[id] = (byte) Math.max(0, constraint.repeatedIndexB2);
             repeatedCount2[id] = (byte) SaturatingCountSketch.capRequirement(constraint.repeatedCount2);
-            if ((repeatedCount1[id] & 0xff) > 1 || (repeatedCount2[id] & 0xff) > 1) recipeFlags |= FLAG_REPEATED;
+            if ((repeatedCount1[id] & 0xff) > 1 || (repeatedCount2[id] & 0xff) > 1) {
+                recipeFlags |= FLAG_REPEATED;
+                queryFeatures |= QUERY_COUNT_SKETCH;
+            }
             flags[id] = (byte) recipeFlags;
         }
         CompiledShapePlacements compiledShapes = CompiledShapePlacements.compile(
-            shapeWidth, shapeHeight, shapeMask, mirroredShapeMask);
+            shapeWidth, shapeHeight, shapeMask, mirroredShapeMask, positionalProbeCount);
         CompiledPositionalProbes compiledPositional = CompiledPositionalProbes.compile(
             shapeWidth, shapeHeight, shapeMask, mirroredShapeMask, positionalProbeCount,
             positionalIndex1, positionalIndex2, positionalIndex3, positionalSignature1,
             positionalSignature2, positionalSignature3);
-        return new ConstraintTable(size, flags, occupiedSlots, presenceMaskA1, presenceMaskB1, presenceMaskA2,
+        return new ConstraintTable(size, queryFeatures, flags, occupiedSlots, presenceMaskA1, presenceMaskB1, presenceMaskA2,
             presenceMaskB2, presenceMaskA3, presenceMaskB3, requiredItemMaskA, requiredItemMaskB,
             requiredVariantMaskA, requiredVariantMaskB, shapeWidth, shapeHeight, shapeMask, mirroredShapeMask,
             compiledShapes, compiledPositional, repeatedIndexA1, repeatedIndexB1, repeatedCount1,
@@ -201,6 +233,22 @@ final class ConstraintTable {
 
     boolean hasPositionalProbes() {
         return compiledPositional.hasAny();
+    }
+
+    boolean needsItemFingerprints() {
+        return (queryFeatures & QUERY_ITEM_FINGERPRINTS) != 0;
+    }
+
+    boolean needsVariantFingerprints() {
+        return (queryFeatures & QUERY_VARIANT_FINGERPRINTS) != 0;
+    }
+
+    boolean needsCountSketch() {
+        return (queryFeatures & QUERY_COUNT_SKETCH) != 0;
+    }
+
+    boolean needsShapeOccupancy() {
+        return (queryFeatures & QUERY_SHAPE_OCCUPANCY) != 0;
     }
 
     boolean accepts(int id, int queryOccupiedSlots, long queryMatchMaskA, long queryMatchMaskB,

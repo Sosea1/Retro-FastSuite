@@ -2,8 +2,6 @@ package dev.sosea1.fastsuite112.recipe;
 
 import dev.sosea1.fastsuite112.recipe.RecipeIndex.FallbackReason;
 import dev.sosea1.fastsuite112.recipe.RecipeSafetyClassifier.Safety;
-import net.minecraft.item.Item;
-
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -11,7 +9,6 @@ import java.util.List;
 
 /** Immutable rebuild-time facts produced by {@link RecipeAnalyzer}. */
 final class RecipeAnalysis {
-    final List<Item[]> pivotCandidates;
     final List<CandidateRouting> candidateRoutings;
     final int[] candidateIngredientIndices;
     final boolean[] advancedCandidateSafe;
@@ -27,8 +24,7 @@ final class RecipeAnalysis {
     final long mirroredShapeOccupancyMask;
     final MandatoryStackConstraint mandatoryStackConstraint;
 
-    private RecipeAnalysis(List<Item[]> pivotCandidates,
-                           List<CandidateRouting> candidateRoutings,
+    private RecipeAnalysis(List<CandidateRouting> candidateRoutings,
                            int[] candidateIngredientIndices,
                            boolean[] advancedCandidateSafe,
                            @Nullable Safety recipeSafety,
@@ -42,7 +38,6 @@ final class RecipeAnalysis {
                            long shapeOccupancyMask,
                            long mirroredShapeOccupancyMask,
                            MandatoryStackConstraint mandatoryStackConstraint) {
-        this.pivotCandidates = freezeCandidates(pivotCandidates);
         this.candidateRoutings = Collections.unmodifiableList(
             new ArrayList<CandidateRouting>(candidateRoutings));
         this.candidateIngredientIndices = candidateIngredientIndices.clone();
@@ -61,11 +56,10 @@ final class RecipeAnalysis {
     }
 
     boolean isIndexable() {
-        return !indexingFailure && fallbackReason == null && !pivotCandidates.isEmpty();
+        return !indexingFailure && fallbackReason == null && !candidateRoutings.isEmpty();
     }
 
-    static RecipeAnalysis indexable(List<Item[]> pivotCandidates,
-                                    List<CandidateRouting> candidateRoutings,
+    static RecipeAnalysis indexable(List<CandidateRouting> candidateRoutings,
                                     List<Integer> candidateIngredientIndices,
                                     List<Boolean> advancedCandidateSafe,
                                     Safety safety,
@@ -81,7 +75,7 @@ final class RecipeAnalysis {
             ingredientIndices[i] = candidateIngredientIndices.get(i);
         }
         return new RecipeAnalysis(
-            pivotCandidates, candidateRoutings, ingredientIndices, advancedSafe, safety, null, false, null, null,
+            candidateRoutings, ingredientIndices, advancedSafe, safety, null, false, null, null,
             exactOccupiedSlotCount, shapeWidth, shapeHeight, shapeOccupancyMask, mirroredShapeOccupancyMask,
             MandatoryStackConstraint.UNCONSTRAINED);
     }
@@ -92,36 +86,29 @@ final class RecipeAnalysis {
 
     static RecipeAnalysis fallback(FallbackReason reason, @Nullable Class<?> diagnosticClass) {
         return new RecipeAnalysis(
-            Collections.<Item[]>emptyList(), Collections.<CandidateRouting>emptyList(), new int[0], new boolean[0],
+            Collections.<CandidateRouting>emptyList(), new int[0], new boolean[0],
             null, reason, false, diagnosticClass, null, -1, 0, 0, 0L, 0L,
             MandatoryStackConstraint.UNCONSTRAINED);
     }
 
     static RecipeAnalysis constrainedFallback(MandatoryStackConstraint constraint) {
         return new RecipeAnalysis(
-            Collections.<Item[]>emptyList(), Collections.<CandidateRouting>emptyList(), new int[0], new boolean[0],
+            Collections.<CandidateRouting>emptyList(), new int[0], new boolean[0],
             null, FallbackReason.PROVIDER_FILTER_ONLY, false, null, null, -1, 0, 0, 0L, 0L, constraint);
     }
 
     static RecipeAnalysis providerFailure(@Nullable Class<?> failureClass) {
         return new RecipeAnalysis(
-            Collections.<Item[]>emptyList(), Collections.<CandidateRouting>emptyList(), new int[0], new boolean[0],
+            Collections.<CandidateRouting>emptyList(), new int[0], new boolean[0],
             null, FallbackReason.PROVIDER_FAILURE, false, null, failureClass, -1, 0, 0, 0L, 0L,
             MandatoryStackConstraint.UNCONSTRAINED);
     }
 
     static RecipeAnalysis failure(@Nullable Class<?> failureClass) {
         return new RecipeAnalysis(
-            Collections.<Item[]>emptyList(), Collections.<CandidateRouting>emptyList(), new int[0], new boolean[0],
+            Collections.<CandidateRouting>emptyList(), new int[0], new boolean[0],
             null, FallbackReason.INDEXING_ERROR, true, null, failureClass, -1, 0, 0, 0L, 0L,
             MandatoryStackConstraint.UNCONSTRAINED);
     }
 
-    private static List<Item[]> freezeCandidates(List<Item[]> candidates) {
-        List<Item[]> frozen = new ArrayList<Item[]>(candidates.size());
-        for (Item[] candidate : candidates) {
-            frozen.add(candidate.clone());
-        }
-        return Collections.unmodifiableList(frozen);
-    }
 }

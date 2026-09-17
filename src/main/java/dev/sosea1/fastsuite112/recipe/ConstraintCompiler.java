@@ -36,9 +36,9 @@ final class ConstraintCompiler {
         int repeatedCount1 = 0;
         int repeatedCount2 = 0;
         IdentityHashMap<Item, Integer> singletonCounts = new IdentityHashMap<Item, Integer>();
-        for (int candidateIndex = 0; candidateIndex < analysis.pivotCandidates.size(); candidateIndex++) {
+        for (int candidateIndex = 0; candidateIndex < analysis.candidateRoutings.size(); candidateIndex++) {
             if (!analysis.advancedCandidateSafe[candidateIndex]) continue;
-            Item[] candidate = analysis.pivotCandidates.get(candidateIndex);
+            Item[] candidate = analysis.candidateRoutings.get(candidateIndex).items;
             if (candidate.length != 1) continue;
             Item item = candidate[0];
             Integer old = singletonCounts.get(item);
@@ -70,7 +70,7 @@ final class ConstraintCompiler {
         long requiredVariantMaskA = 0L;
         long requiredVariantMaskB = 0L;
         for (int candidateIndex = 0; candidateIndex < analysis.candidateRoutings.size(); candidateIndex++) {
-            if (!analysis.advancedCandidateSafe[candidateIndex]) continue;
+            if (candidateIndex == selectedPivotIndex || !analysis.advancedCandidateSafe[candidateIndex]) continue;
             CandidateRouting routing = analysis.candidateRoutings.get(candidateIndex);
             if (routing.routes.length != 1 || routing.items.length != 1) continue;
 
@@ -208,10 +208,10 @@ final class ConstraintCompiler {
         CandidateRouting primaryRouting = analysis.candidateRoutings.get(primaryIndex);
         CandidateRouting firstSelectedRouting = firstSelectedIndex < 0 ? null : analysis.candidateRoutings.get(firstSelectedIndex);
 
-        for (int i = 0; i < analysis.pivotCandidates.size(); i++) {
+        for (int i = 0; i < analysis.candidateRoutings.size(); i++) {
             if (i == primaryIndex || i == firstSelectedIndex || !analysis.advancedCandidateSafe[i]) continue;
-            Item[] items = analysis.pivotCandidates.get(i);
             CandidateRouting routing = analysis.candidateRoutings.get(i);
+            Item[] items = routing.items;
 
             // Same Item but different exact metadata is still a useful independent condition.
             // Skip only genuinely equivalent accepted Item/meta route sets.
