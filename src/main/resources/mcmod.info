@@ -1,0 +1,15 @@
+[
+  {
+    "modid": "${mod_id}",
+    "name": "${mod_name}",
+    "description": "Fast recipe lookup for large Minecraft Forge 1.12.2 modpacks.",
+    "version": "${mod_version}",
+    "mcversion": "1.12.2",
+    "logoFile": "${mod_logo_path}",
+    "url": "",
+    "authorList": ["Sosea1 contributors"],
+    "credits": "Inspired by FastSuite by Shadows_of_Fire. Compatibility design references Universal Tweaks and FastWorkbench.",
+    "requiredMods": ["mixinbooter"],
+    "dependencies": []
+  }
+]

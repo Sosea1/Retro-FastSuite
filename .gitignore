@@ -1,0 +1,14 @@
+.gradle/
+build/
+run/
+out/
+.idea/
+*.iml
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.log
+*.hprof
+hs_err_pid*
+replay_pid*
+.worktrees/

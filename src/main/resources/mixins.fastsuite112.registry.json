@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.sosea1.fastsuite112.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "refmap": "mixins.fastsuite112.refmap.json",
+  "mixins": [
+    "ForgeRecipeRegistryMutationMixin"
+  ],
+  "client": [],
+  "server": []
+}
