@@ -17,12 +17,12 @@ final class ReleaseMetadataTest {
     void bundlesTheRetroFastSuiteReleaseIdentityAndLogo() throws IOException {
         assertEquals("fastsuite", FastSuite112.MOD_ID);
         assertEquals("Retro FastSuite", FastSuite112.NAME);
-        assertEquals("1.0.0", FastSuite112.VERSION);
+        assertEquals("1.0.1", FastSuite112.VERSION);
 
         String metadata = readResource("/mcmod.info");
         assertTrue(metadata.contains("\"modid\": \"fastsuite\""));
         assertTrue(metadata.contains("\"name\": \"Retro FastSuite\""));
-        assertTrue(metadata.contains("\"version\": \"1.0.0\""));
+        assertTrue(metadata.contains("\"version\": \"1.0.1\""));
         assertTrue(metadata.contains("\"logoFile\": \"assets/fastsuite112/logo.png\""));
         try (InputStream logo = FastSuite112.class.getResourceAsStream("/assets/fastsuite112/logo.png")) {
             assertNotNull(logo, "Missing classpath resource: /assets/fastsuite112/logo.png");
