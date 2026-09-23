@@ -1,8 +1,11 @@
 package com.sosea1.fastsuite112;
 
 import com.sosea1.fastsuite112.command.CommandFastSuite;
+import com.sosea1.fastsuite112.compat.MixinHookTracker;
+import com.sosea1.fastsuite112.config.FastSuiteConfig;
 import com.sosea1.fastsuite112.recipe.BuiltInConstraintProviders;
 import com.sosea1.fastsuite112.recipe.RecipeIndex;
+import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
@@ -36,7 +39,11 @@ public final class FastSuite112 {
 
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
+        // Final cheap lifecycle boundary before normal gameplay. This deliberately invalidates even
+        // when Forge registry identity did not change, covering late in-place recipe mutations.
+        RecipeIndex.INSTANCE.invalidate("server-start recipe lifecycle checkpoint");
         event.registerServerCommand(new CommandFastSuite());
+        logCompatibilityWarnings();
         invokeDevHook("serverStarting", new Class<?>[] { FMLServerStartingEvent.class }, new Object[] { event });
     }
 
@@ -44,6 +51,18 @@ public final class FastSuite112 {
     public void serverStopping(FMLServerStoppingEvent event) {
         invokeDevHook("serverStopping", new Class<?>[] { FMLServerStoppingEvent.class }, new Object[] { event });
         RecipeIndex.INSTANCE.clear();
+    }
+
+    private static void logCompatibilityWarnings() {
+        if (FastSuiteConfig.indexedCrafting && !MixinHookTracker.hasAnyLookupHookApplied()) {
+            LOGGER.warn("Indexed crafting is enabled, but neither the vanilla nor Universal Tweaks lookup hook was applied. " +
+                "FastSuite will not accelerate crafting lookups; run /fastsuite stats for diagnostics.");
+        }
+
+        if (Loader.isModLoaded("crafttweaker") && !MixinHookTracker.craftTweakerRefreshHookApplied) {
+            LOGGER.warn("CraftTweaker is installed but the optional recipe-refresh checkpoint hook was not applied. " +
+                "Forge registry mutations are still observed, but in-place CraftTweaker recipe changes may require /fastsuite rebuild.");
+        }
     }
 
     private static Class<?> findDevTools() {

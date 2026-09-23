@@ -43,18 +43,17 @@ final class CompiledShapePlacements {
                                            @Nullable long[] shapeMask,
                                            @Nullable long[] mirroredShapeMask,
                                            @Nullable byte[] positionalProbeCount) {
-        if (shapeWidth == null || shapeHeight == null || shapeMask == null || mirroredShapeMask == null
-            || positionalProbeCount == null) {
+        if (shapeWidth == null || shapeHeight == null || shapeMask == null || mirroredShapeMask == null) {
             return EMPTY;
         }
         int size = shapeWidth.length;
         if (shapeHeight.length != size || shapeMask.length != size || mirroredShapeMask.length != size
-            || positionalProbeCount.length != size) {
+            || (positionalProbeCount != null && positionalProbeCount.length != size)) {
             throw new IllegalArgumentException("Mismatched shape constraint columns");
         }
         boolean anyShape = false;
         for (int id = 0; id < size; id++) {
-            if ((shapeWidth[id] & 0xff) != 0 && (positionalProbeCount[id] & 0xff) == 0) {
+            if ((shapeWidth[id] & 0xff) != 0 && !hasPositionalProbe(positionalProbeCount, id)) {
                 anyShape = true;
                 break;
             }
@@ -69,7 +68,7 @@ final class CompiledShapePlacements {
         LongBuilder masks3 = new LongBuilder();
 
         for (int id = 0; id < size; id++) {
-            if ((positionalProbeCount[id] & 0xff) != 0) continue;
+            if (hasPositionalProbe(positionalProbeCount, id)) continue;
             int width = shapeWidth[id] & 0xff;
             int height = shapeHeight[id] & 0xff;
             if (width == 0 || height == 0) continue;
@@ -85,6 +84,10 @@ final class CompiledShapePlacements {
 
         return new CompiledShapePlacements(
             size, start2, count2, start3, count3, masks2.toArray(), masks3.toArray());
+    }
+
+    private static boolean hasPositionalProbe(@Nullable byte[] positionalProbeCount, int id) {
+        return positionalProbeCount != null && (positionalProbeCount[id] & 0xff) != 0;
     }
 
     boolean supports(int gridWidth, int gridHeight) {

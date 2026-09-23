@@ -14,27 +14,39 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 final class FastSuiteApiContractTest {
 
     @Test
-    void apiV2KeepsOrderedAllMatchAndLegacyCandidateSurfaces() throws Exception {
-        assertEquals(3, FastSuiteAPI.API_VERSION);
-        assertEquals(3, FastSuiteAPI.getApiVersion());
+    void apiV4KeepsLegacySurfacesAndAddsAllocationLightConflictQueries() throws Exception {
+        assertEquals(4, FastSuiteAPI.API_VERSION);
+        assertEquals(4, FastSuiteAPI.getApiVersion());
 
         Method visitor = FastSuiteAPI.class.getMethod(
-                "visitMatchingRecipes",
-                InventoryCrafting.class,
-                World.class,
-                RecipeMatchVisitor.class);
+            "visitMatchingRecipes",
+            InventoryCrafting.class,
+            World.class,
+            RecipeMatchVisitor.class);
+        Method boundedVisitor = FastSuiteAPI.class.getMethod(
+            "visitMatchingRecipes",
+            InventoryCrafting.class,
+            World.class,
+            int.class,
+            RecipeMatchVisitor.class);
+        Method multiple = FastSuiteAPI.class.getMethod(
+            "hasMultipleMatchingRecipes",
+            InventoryCrafting.class,
+            World.class);
         Method allMatches = FastSuiteAPI.class.getMethod(
-                "findAllMatchingRecipes",
-                InventoryCrafting.class,
-                World.class);
+            "findAllMatchingRecipes",
+            InventoryCrafting.class,
+            World.class);
         Method candidates = FastSuiteAPI.class.getMethod(
-                "getCandidateRecipes",
-                InventoryCrafting.class);
+            "getCandidateRecipes",
+            InventoryCrafting.class);
         Method legacy = FastSuiteAPI.class.getMethod(
-                "getCraftingCandidates",
-                InventoryCrafting.class);
+            "getCraftingCandidates",
+            InventoryCrafting.class);
 
         assertNotNull(visitor);
+        assertNotNull(boundedVisitor);
+        assertNotNull(multiple);
         assertNotNull(allMatches);
         assertNotNull(candidates);
         assertTrue(legacy.isAnnotationPresent(Deprecated.class));

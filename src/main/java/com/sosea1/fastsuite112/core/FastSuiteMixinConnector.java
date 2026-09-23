@@ -12,11 +12,17 @@ import java.io.File;
 public final class FastSuiteMixinConnector implements IMixinConnector {
     @Override
     public void connect() {
-        // Registry observer is always queued to keep index lifecycle synced with Forge registries
+        // Registry observer is always queued to keep index lifecycle synced with Forge registries.
         Mixins.addConfiguration("mixins.fastsuite112.registry.json");
 
-        // Independent client-side Forge 1.12 packed-ingredient race workaround
+        // Independent client-side Forge 1.12 packed-ingredient race workaround.
         Mixins.addConfiguration("mixins.fastsuite112.fix.ingredientcache.json");
+
+        // CraftTweaker 1.12 applies recipe actions late in post-init and calls MCRecipeManager.refreshRecipes()
+        // after those batches. Observe that exact lifecycle checkpoint without adding a hard dependency.
+        if (ModDiscoverer.isModPresent("crafttweaker")) {
+            Mixins.addConfiguration("mixins.fastsuite112.compat.crafttweaker.json");
+        }
 
         // When Universal Tweaks has Crafting Cache enabled, it overwrites CraftingManager methods.
         // We accelerate UT's fallback via UniversalTweaksCraftingCacheMixin instead of hooking CraftingManager.
@@ -65,7 +71,7 @@ public final class FastSuiteMixinConnector implements IMixinConnector {
             }
         }
 
-        // Default in Universal Tweaks is enabled
+        // Default in Universal Tweaks is enabled.
         return true;
     }
 

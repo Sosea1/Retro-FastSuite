@@ -38,9 +38,10 @@ public final class RecipeLookup {
     /**
      * Return every matching recipe in exact registry order.
      *
-     * <p>This is intended for conflict-resolution consumers such as Polymorph-style selectors.
-     * It is more expensive than first-match lookup by definition, but avoids scanning recipes that
-     * the conservative index can prove impossible for the supplied grid.</p>
+     * <p>This is intended for conflict-resolution consumers that genuinely need a materialized list.
+     * Consumers that only need to detect a conflict or stream results should use
+     * {@link #hasMultipleMatchingRecipes} or {@link #visitMatchingRecipes} to avoid the result-list
+     * allocation entirely.</p>
      */
     public static List<IRecipe> findAllMatchingRecipes(InventoryCrafting inventory, World world) {
         if (inventory == null) return Collections.emptyList();
@@ -55,6 +56,22 @@ public final class RecipeLookup {
             ? Collections.<IRecipe>emptyList()
             : Collections.unmodifiableList(matches);
     }
+
+    /**
+     * Fast conflict probe for Polymorph-style consumers. Stops immediately after the second match
+     * and never allocates a result list.
+     */
+    public static boolean hasMultipleMatchingRecipes(InventoryCrafting inventory, World world) {
+        if (inventory == null) return false;
+        int matches = 0;
+        for (IRecipe recipe : RecipeIndex.INSTANCE.candidatesFor(inventory)) {
+            if (recipe.matches(inventory, world) && ++matches >= 2) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Visit matching recipes in exact registry order without allocating a result List.
      *
@@ -63,19 +80,30 @@ public final class RecipeLookup {
      * logical crafting context and recipe exceptions remain observable.</p>
      */
     public static int visitMatchingRecipes(InventoryCrafting inventory, World world, RecipeMatchVisitor visitor) {
-        if (inventory == null) return 0;
+        return visitMatchingRecipes(inventory, world, Integer.MAX_VALUE, visitor);
+    }
+
+    /**
+     * Bounded variant for consumers that only need the first few conflicts. {@code maxMatches == 0}
+     * performs no recipe matching and returns zero.
+     */
+    public static int visitMatchingRecipes(InventoryCrafting inventory,
+                                           World world,
+                                           int maxMatches,
+                                           RecipeMatchVisitor visitor) {
         if (visitor == null) throw new IllegalArgumentException("visitor");
+        if (maxMatches < 0) throw new IllegalArgumentException("maxMatches");
+        if (inventory == null || maxMatches == 0) return 0;
 
         int visited = 0;
         for (IRecipe recipe : RecipeIndex.INSTANCE.candidatesFor(inventory)) {
             if (recipe.matches(inventory, world)) {
                 visited++;
-                if (!visitor.visit(recipe)) {
+                if (!visitor.visit(recipe) || visited >= maxMatches) {
                     break;
                 }
             }
         }
         return visited;
     }
-
 }

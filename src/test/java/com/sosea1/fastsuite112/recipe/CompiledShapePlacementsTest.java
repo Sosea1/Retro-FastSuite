@@ -22,6 +22,21 @@ public class CompiledShapePlacementsTest {
     }
 
     @Test
+    void compilesShapeOnlyColumnsWhenNoPositionalColumnWasAllocated() {
+        byte[] width = {(byte) 2};
+        byte[] height = {(byte) 1};
+        long[] mask = {0b11L};
+
+        CompiledShapePlacements compiled = CompiledShapePlacements.compile(
+            width, height, mask, mask, null);
+
+        assertTrue(compiled.supports(2, 2));
+        assertTrue(compiled.matches(0, 2, 2, 0b0011L));
+        assertTrue(compiled.matches(0, 2, 2, 0b1100L));
+        assertFalse(compiled.matches(0, 2, 2, 0b0101L));
+    }
+
+    @Test
     public void rejectsRecipeLargerThanGrid() {
         byte[] width = {(byte) 3};
         byte[] height = {(byte) 3};
