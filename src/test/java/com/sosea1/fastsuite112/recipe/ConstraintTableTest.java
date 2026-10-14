@@ -155,9 +155,9 @@ final class ConstraintTableTest {
             .build()});
 
         assertTrue(table.accepts(0, 0, 0L, 0L, 0L, 0L, 0L, 0L,
-            0L, 0L, 2, 2, 3L, 0L, 0L, 0));
+            0L, 0L, 2, 2, CompiledShapeGeometry.prepareQuery(2, 2, 3L), 0L, 0L, 0));
         assertFalse(table.accepts(0, 0, 0L, 0L, 0L, 0L, 0L, 0L,
-            0L, 0L, 2, 2, 1L, 0L, 0L, 0));
+            0L, 0L, 2, 2, CompiledShapeGeometry.prepareQuery(2, 2, 1L), 0L, 0L, 0));
     }
 
     @Test
@@ -168,9 +168,9 @@ final class ConstraintTableTest {
             .build()});
 
         assertTrue(table.accepts(0, 0, 0L, 0L, 0L, 0L, 0L, 0L,
-            0L, 0L, 2, 2, 1L, 0x0011L, 0L, 0));
+            0L, 0L, 2, 2, CompiledShapeGeometry.prepareQuery(2, 2, 1L), 0x0011L, 0L, 0));
         assertFalse(table.accepts(0, 0, 0L, 0L, 0L, 0L, 0L, 0L,
-            0L, 0L, 2, 2, 1L, 0x0044L, 0L, 0));
+            0L, 0L, 2, 2, CompiledShapeGeometry.prepareQuery(2, 2, 1L), 0x0044L, 0L, 0));
     }
 
     private static Object field(ConstraintTable table, String name) throws Exception {

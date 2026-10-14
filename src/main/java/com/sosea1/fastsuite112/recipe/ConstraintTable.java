@@ -15,7 +15,6 @@ final class ConstraintTable {
     private static final int FLAG_PRESENCE_2 = 1 << 4;
     private static final int FLAG_REPEATED = 1 << 5;
     private static final int FLAG_SHAPE = 1 << 6;
-    private static final int FLAG_POSITIONAL = 1 << 7;
 
     private static final int QUERY_ITEM_FINGERPRINTS = 1;
     private static final int QUERY_VARIANT_FINGERPRINTS = 1 << 1;
@@ -27,7 +26,7 @@ final class ConstraintTable {
         null, null, null, null, null, null,
         null, null, null, null,
         null, null, null, null,
-        CompiledShapePlacements.EMPTY, CompiledPositionalProbes.EMPTY,
+        CompiledShapeGeometry.EMPTY,
         null, null, null, null, null, null);
 
     private final int size;
@@ -48,8 +47,7 @@ final class ConstraintTable {
     @Nullable private final byte[] shapeHeight;
     @Nullable private final long[] shapeMask;
     @Nullable private final long[] mirroredShapeMask;
-    private final CompiledShapePlacements compiledShapes;
-    private final CompiledPositionalProbes compiledPositional;
+    private final CompiledShapeGeometry geometry;
     @Nullable private final byte[] repeatedIndexA1;
     @Nullable private final byte[] repeatedIndexB1;
     @Nullable private final byte[] repeatedCount1;
@@ -66,7 +64,7 @@ final class ConstraintTable {
                             @Nullable long[] requiredVariantMaskA, @Nullable long[] requiredVariantMaskB,
                             @Nullable byte[] shapeWidth, @Nullable byte[] shapeHeight,
                             @Nullable long[] shapeMask, @Nullable long[] mirroredShapeMask,
-                            CompiledShapePlacements compiledShapes, CompiledPositionalProbes compiledPositional,
+                            CompiledShapeGeometry geometry,
                             @Nullable byte[] repeatedIndexA1, @Nullable byte[] repeatedIndexB1,
                             @Nullable byte[] repeatedCount1, @Nullable byte[] repeatedIndexA2,
                             @Nullable byte[] repeatedIndexB2, @Nullable byte[] repeatedCount2) {
@@ -88,8 +86,7 @@ final class ConstraintTable {
         this.shapeHeight = shapeHeight;
         this.shapeMask = shapeMask;
         this.mirroredShapeMask = mirroredShapeMask;
-        this.compiledShapes = compiledShapes;
-        this.compiledPositional = compiledPositional;
+        this.geometry = geometry;
         this.repeatedIndexA1 = repeatedIndexA1;
         this.repeatedIndexB1 = repeatedIndexB1;
         this.repeatedCount1 = repeatedCount1;
@@ -108,7 +105,7 @@ final class ConstraintTable {
                 null, null, null, null, null, null,
                 null, null, null, null,
                 null, null, null, null,
-                CompiledShapePlacements.EMPTY, CompiledPositionalProbes.EMPTY,
+                CompiledShapeGeometry.EMPTY,
                 null, null, null, null, null, null);
         }
 
@@ -203,7 +200,6 @@ final class ConstraintTable {
                     positionalSignature1[id] = constraint.positionalSignature1;
                     positionalSignature2[id] = constraint.positionalSignature2;
                     positionalSignature3[id] = constraint.positionalSignature3;
-                    recipeFlags |= FLAG_POSITIONAL;
                     queryFeatures |= QUERY_ITEM_FINGERPRINTS | QUERY_VARIANT_FINGERPRINTS;
                 }
             }
@@ -222,16 +218,14 @@ final class ConstraintTable {
             flags[id] = (byte) recipeFlags;
         }
 
-        CompiledShapePlacements compiledShapes = CompiledShapePlacements.compile(
-            shapeWidth, shapeHeight, shapeMask, mirroredShapeMask, positionalProbeCount);
-        CompiledPositionalProbes compiledPositional = CompiledPositionalProbes.compile(
+        CompiledShapeGeometry geometry = CompiledShapeGeometry.compile(
             shapeWidth, shapeHeight, shapeMask, mirroredShapeMask, positionalProbeCount,
             positionalIndex1, positionalIndex2, positionalIndex3, positionalSignature1,
             positionalSignature2, positionalSignature3);
         return new ConstraintTable(size, queryFeatures, flags, occupiedSlots, presenceMaskA1, presenceMaskB1, presenceMaskA2,
             presenceMaskB2, presenceMaskA3, presenceMaskB3, requiredItemMaskA, requiredItemMaskB,
             requiredVariantMaskA, requiredVariantMaskB, shapeWidth, shapeHeight, shapeMask, mirroredShapeMask,
-            compiledShapes, compiledPositional, repeatedIndexA1, repeatedIndexB1, repeatedCount1,
+            geometry, repeatedIndexA1, repeatedIndexB1, repeatedCount1,
             repeatedIndexA2, repeatedIndexB2, repeatedCount2);
     }
 
@@ -240,7 +234,7 @@ final class ConstraintTable {
     }
 
     boolean hasPositionalProbes() {
-        return compiledPositional.hasAny();
+        return geometry.hasPositionalProbes();
     }
 
     boolean needsItemFingerprints() {
@@ -259,10 +253,11 @@ final class ConstraintTable {
         return (queryFeatures & QUERY_SHAPE_OCCUPANCY) != 0;
     }
 
+    /** queryShape is prepared once by CompiledShapeGeometry.prepareQuery() for the entire lookup. */
     boolean accepts(int id, int queryOccupiedSlots, long queryMatchMaskA, long queryMatchMaskB,
                     long queryItemMaskA, long queryItemMaskB, long queryVariantMaskA, long queryVariantMaskB,
                     long queryCountSketchA, long queryCountSketchB, int queryGridWidth, int queryGridHeight,
-                    long queryOccupancyMask, long querySlotTokens0, long querySlotTokens1, int querySlotToken8) {
+                    long queryShape, long querySlotTokens0, long querySlotTokens1, int querySlotToken8) {
         if (id < 0 || id >= size) throw new IllegalStateException("Recipe constraint id out of range: " + id + " / " + size);
         if (flags == null) return true;
         int recipeFlags = flags[id] & 0xff;
@@ -293,12 +288,10 @@ final class ConstraintTable {
             if (count2 > 1 && SaturatingCountSketch.estimate(queryCountSketchA, repeatedIndexA2[id] & 0xff, queryCountSketchB, repeatedIndexB2[id] & 0xff) < count2) return false;
         }
         if ((recipeFlags & FLAG_SHAPE) != 0 && queryGridWidth != 0) {
-            if ((recipeFlags & FLAG_POSITIONAL) != 0 && compiledPositional.supports(queryGridWidth, queryGridHeight)) {
-                // Positional probes include the same exact occupancy check, avoiding an equivalent placement scan.
-                if (!compiledPositional.matches(id, queryGridWidth, queryGridHeight, queryOccupancyMask, querySlotTokens0, querySlotTokens1, querySlotToken8)) return false;
-            } else if (compiledShapes.supports(queryGridWidth, queryGridHeight)) {
-                if (!compiledShapes.matches(id, queryGridWidth, queryGridHeight, queryOccupancyMask)) return false;
-            } else if (!ShapeOccupancy.matches(queryOccupancyMask, queryGridWidth, queryGridHeight,
+            if (CompiledShapeGeometry.supports(queryGridWidth, queryGridHeight)) {
+                if (!geometry.matches(id, queryGridWidth, queryGridHeight, queryShape,
+                    querySlotTokens0, querySlotTokens1, querySlotToken8)) return false;
+            } else if (!ShapeOccupancy.matches(queryShape, queryGridWidth, queryGridHeight,
                 shapeWidth[id] & 0xff, shapeHeight[id] & 0xff, shapeMask[id], mirroredShapeMask[id])) return false;
         }
         return true;

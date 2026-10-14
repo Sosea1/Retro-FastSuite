@@ -316,6 +316,7 @@ public final class RecipeIndex {
 
         final int queryGridWidth = shapeOccupancyNeeded && occupancyMaskValid ? gridWidth : 0;
         final int queryGridHeight = shapeOccupancyNeeded && occupancyMaskValid ? gridHeight : 0;
+        final long queryShape = CompiledShapeGeometry.prepareQuery(queryGridWidth, queryGridHeight, queryOccupancyMask);
         if (unionBucketCount == 1) {
             return new FilteredSingleBucketIterable(
                 snapshot.recipesById,
@@ -333,7 +334,7 @@ public final class RecipeIndex {
                 queryCountSketchB,
                 queryGridWidth,
                 queryGridHeight,
-                queryOccupancyMask,
+                queryShape,
                 querySlotTokens0,
                 querySlotTokens1,
                 querySlotToken8
@@ -361,7 +362,7 @@ public final class RecipeIndex {
                 queryCountSketchB,
                 queryGridWidth,
                 queryGridHeight,
-                queryOccupancyMask,
+                queryShape,
                 querySlotTokens0,
                 querySlotTokens1,
                 querySlotToken8)
@@ -382,7 +383,7 @@ public final class RecipeIndex {
                 queryCountSketchB,
                 queryGridWidth,
                 queryGridHeight,
-                queryOccupancyMask,
+                queryShape,
                 querySlotTokens0,
                 querySlotTokens1,
                 querySlotToken8);
@@ -1291,7 +1292,7 @@ public final class RecipeIndex {
         private final long queryCountSketchB;
         private final int queryGridWidth;
         private final int queryGridHeight;
-        private final long queryOccupancyMask;
+        private final long queryShape;
         private final long querySlotTokens0;
         private final long querySlotTokens1;
         private final int querySlotToken8;
@@ -1311,7 +1312,7 @@ public final class RecipeIndex {
                                              long queryCountSketchB,
                                              int queryGridWidth,
                                              int queryGridHeight,
-                                             long queryOccupancyMask,
+                                             long queryShape,
                                              long querySlotTokens0,
                                              long querySlotTokens1,
                                              int querySlotToken8) {
@@ -1330,7 +1331,7 @@ public final class RecipeIndex {
             this.queryCountSketchB = queryCountSketchB;
             this.queryGridWidth = queryGridWidth;
             this.queryGridHeight = queryGridHeight;
-            this.queryOccupancyMask = queryOccupancyMask;
+            this.queryShape = queryShape;
             this.querySlotTokens0 = querySlotTokens0;
             this.querySlotTokens1 = querySlotTokens1;
             this.querySlotToken8 = querySlotToken8;
@@ -1384,7 +1385,7 @@ public final class RecipeIndex {
                             constraints, id, occupiedSlots, queryMatchMaskA, queryMatchMaskB,
                             queryItemMaskA, queryItemMaskB, queryVariantMaskA, queryVariantMaskB,
                             queryCountSketchA, queryCountSketchB,
-                            queryGridWidth, queryGridHeight, queryOccupancyMask,
+                            queryGridWidth, queryGridHeight, queryShape,
                             querySlotTokens0, querySlotTokens1, querySlotToken8)) {
                             nextId = id;
                             prepared = true;
@@ -1424,7 +1425,7 @@ public final class RecipeIndex {
         private final long queryCountSketchB;
         private final int queryGridWidth;
         private final int queryGridHeight;
-        private final long queryOccupancyMask;
+        private final long queryShape;
         private final long querySlotTokens0;
         private final long querySlotTokens1;
         private final int querySlotToken8;
@@ -1448,7 +1449,7 @@ public final class RecipeIndex {
                                                long queryCountSketchB,
                                                int queryGridWidth,
                                                int queryGridHeight,
-                                               long queryOccupancyMask,
+                                               long queryShape,
                                                long querySlotTokens0,
                                                long querySlotTokens1,
                                                int querySlotToken8) {
@@ -1472,7 +1473,7 @@ public final class RecipeIndex {
             this.queryCountSketchB = queryCountSketchB;
             this.queryGridWidth = queryGridWidth;
             this.queryGridHeight = queryGridHeight;
-            this.queryOccupancyMask = queryOccupancyMask;
+            this.queryShape = queryShape;
             this.querySlotTokens0 = querySlotTokens0;
             this.querySlotTokens1 = querySlotTokens1;
             this.querySlotToken8 = querySlotToken8;
@@ -1494,7 +1495,7 @@ public final class RecipeIndex {
                                                long queryCountSketchB,
                                                int queryGridWidth,
                                                int queryGridHeight,
-                                               long queryOccupancyMask,
+                                               long queryShape,
                                                long querySlotTokens0,
                                                long querySlotTokens1,
                                                int querySlotToken8) {
@@ -1518,7 +1519,7 @@ public final class RecipeIndex {
             this.queryCountSketchB = queryCountSketchB;
             this.queryGridWidth = queryGridWidth;
             this.queryGridHeight = queryGridHeight;
-            this.queryOccupancyMask = queryOccupancyMask;
+            this.queryShape = queryShape;
             this.querySlotTokens0 = querySlotTokens0;
             this.querySlotTokens1 = querySlotTokens1;
             this.querySlotToken8 = querySlotToken8;
@@ -1559,7 +1560,7 @@ public final class RecipeIndex {
                             constraints, id, occupiedSlots, queryMatchMaskA, queryMatchMaskB,
                             queryItemMaskA, queryItemMaskB, queryVariantMaskA, queryVariantMaskB,
                             queryCountSketchA, queryCountSketchB,
-                            queryGridWidth, queryGridHeight, queryOccupancyMask,
+                            queryGridWidth, queryGridHeight, queryShape,
                             querySlotTokens0, querySlotTokens1, querySlotToken8)) {
                             nextId = id;
                             prepared = true;
@@ -1590,7 +1591,7 @@ public final class RecipeIndex {
                                              long queryCountSketchB,
                                              int queryGridWidth,
                                              int queryGridHeight,
-                                             long queryOccupancyMask,
+                                             long queryShape,
                                              long querySlotTokens0,
                                              long querySlotTokens1,
                                              int querySlotToken8) {
@@ -1598,7 +1599,7 @@ public final class RecipeIndex {
             id, occupiedSlots, queryMatchMaskA, queryMatchMaskB,
             queryItemMaskA, queryItemMaskB, queryVariantMaskA, queryVariantMaskB,
             queryCountSketchA, queryCountSketchB,
-            queryGridWidth, queryGridHeight, queryOccupancyMask,
+            queryGridWidth, queryGridHeight, queryShape,
             querySlotTokens0, querySlotTokens1, querySlotToken8);
     }
 

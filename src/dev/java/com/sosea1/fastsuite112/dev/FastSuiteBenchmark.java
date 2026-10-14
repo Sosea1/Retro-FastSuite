@@ -361,6 +361,7 @@ public final class FastSuiteBenchmark {
                 "Registry: %,d recipes | measured: %,d lookups/cell | warmup: %,d | elapsed: %,d ms",
                 RecipeIndex.INSTANCE.getRecipeCount(), mode.iterations, mode.warmupIterations, elapsedMs));
             send("Workloads mirror modern FastSuite: match-all and findFirst; result caches bypassed.");
+            send("Geometry filter: normalized bounds (experimental).");
             send("");
             send(TextFormatting.AQUA + "Matching every recipe (Polymorph-style)");
             for (int i = 0; i < cases.length; i++) printRow(i, Workload.ALL_MATCHES);
@@ -369,7 +370,7 @@ public final class FastSuiteBenchmark {
             for (int i = 0; i < cases.length; i++) printRow(i, Workload.FIRST_MATCH);
             RecipeIndex.FallbackDiagnostics fallbackDiagnostics = RecipeIndex.INSTANCE.getFallbackDiagnostics();
             send("");
-            send(String.format(Locale.ROOT, "Fallback floor: %,d recipes (%.2f%% of registry) | reasons=%s",
+            send(String.format(Locale.ROOT, "Fallback registry pool: %,d recipes (%.2f%% of registry) | reasons=%s",
                 fallbackDiagnostics.total,
                 RecipeIndex.INSTANCE.getRecipeCount() == 0 ? 0.0D : fallbackDiagnostics.total * 100.0D / RecipeIndex.INSTANCE.getRecipeCount(),
                 fallbackDiagnostics.byReason));
@@ -385,14 +386,13 @@ public final class FastSuiteBenchmark {
             double speedup = indexed <= 0.0D ? 0.0D : vanilla / indexed;
             int candidateTotal = candidateCounts[index][0];
             int fallback = candidateCounts[index][2];
-            int indexedCandidates = Math.max(0, candidateTotal - fallback);
             String allocation = indexedAllocated < 0.0D || vanillaAllocated < 0.0D
                 ? " | alloc n/a"
                 : String.format(Locale.ROOT, " | alloc I/V %.1f / %.1f B/op", indexedAllocated, vanillaAllocated);
             String row = String.format(Locale.ROOT,
-                "%s: Indexed %.2f us | Vanilla %.2f us | %.2fx%s | candidates %,d = indexed %,d + fallback %,d / %,d",
+                "%s: Indexed %.2f us | Vanilla %.2f us | %.2fx%s | candidates %,d / %,d | registry fallback %,d",
                 cases[index].name, indexed, vanilla, speedup, allocation,
-                candidateTotal, indexedCandidates, fallback, candidateCounts[index][1]);
+                candidateTotal, candidateCounts[index][1], fallback);
             send(row);
         }
 
