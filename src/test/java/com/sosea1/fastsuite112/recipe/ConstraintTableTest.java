@@ -2,7 +2,11 @@ package com.sosea1.fastsuite112.recipe;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class ConstraintTableTest {
@@ -41,6 +45,57 @@ final class ConstraintTableTest {
             RecipeConstraint.builder().shape(1, 1, 1L, 1L).build()
         });
         assertTrue(shaped.needsShapeOccupancy());
+    }
+
+    @Test
+    void freezeAllocatesOnlyConstraintFamiliesThatAreActuallyUsed() throws Exception {
+        ConstraintTable occupiedOnly = ConstraintTable.freeze(new RecipeConstraint[] {
+            RecipeConstraint.builder().occupiedSlots(1).build(),
+            null,
+            null
+        });
+
+        assertNotNull(field(occupiedOnly, "flags"));
+        assertNotNull(field(occupiedOnly, "occupiedSlots"));
+        assertNull(field(occupiedOnly, "requiredItemMaskA"));
+        assertNull(field(occupiedOnly, "requiredVariantMaskA"));
+        assertNull(field(occupiedOnly, "presenceMaskA1"));
+        assertNull(field(occupiedOnly, "presenceMaskA2"));
+        assertNull(field(occupiedOnly, "presenceMaskA3"));
+        assertNull(field(occupiedOnly, "shapeWidth"));
+        assertNull(field(occupiedOnly, "repeatedCount1"));
+
+        ConstraintTable shapeOnly = ConstraintTable.freeze(new RecipeConstraint[] {
+            RecipeConstraint.builder().shape(2, 1, 3L, 3L).build()
+        });
+        assertNotNull(field(shapeOnly, "shapeWidth"));
+        assertNull(field(shapeOnly, "requiredItemMaskA"));
+        assertNull(field(shapeOnly, "repeatedCount1"));
+    }
+
+    @Test
+    void emptyConstraintObjectsDoNotAllocateAFlagsTable() throws Exception {
+        ConstraintTable table = ConstraintTable.freeze(new RecipeConstraint[] {
+            RecipeConstraint.builder().build(),
+            null
+        });
+        assertNull(field(table, "flags"));
+        assertFalse(table.hasAny());
+    }
+
+    @Test
+    void thirdPresenceGroupWorksWhenItIsTheOnlyPresenceColumn() throws Exception {
+        ConstraintTable table = ConstraintTable.freeze(new RecipeConstraint[] {
+            RecipeConstraint.builder().presenceGroup(2, 4L, 8L).build()
+        });
+
+        assertNull(field(table, "presenceMaskA1"));
+        assertNull(field(table, "presenceMaskA2"));
+        assertNotNull(field(table, "presenceMaskA3"));
+        assertTrue(table.accepts(0, 0, 4L, 8L, 0L, 0L, 0L, 0L,
+            0L, 0L, 0, 0, 0L, 0L, 0L, 0));
+        assertFalse(table.accepts(0, 0, 4L, 0L, 0L, 0L, 0L, 0L,
+            0L, 0L, 0, 0, 0L, 0L, 0L, 0));
     }
 
     @Test
@@ -100,9 +155,9 @@ final class ConstraintTableTest {
             .build()});
 
         assertTrue(table.accepts(0, 0, 0L, 0L, 0L, 0L, 0L, 0L,
-            0L, 0L, 2, 2, 3L, 0L, 0L, 0));
+            0L, 0L, 2, 2, CompiledShapeGeometry.prepareQuery(2, 2, 3L), 0L, 0L, 0));
         assertFalse(table.accepts(0, 0, 0L, 0L, 0L, 0L, 0L, 0L,
-            0L, 0L, 2, 2, 1L, 0L, 0L, 0));
+            0L, 0L, 2, 2, CompiledShapeGeometry.prepareQuery(2, 2, 1L), 0L, 0L, 0));
     }
 
     @Test
@@ -113,8 +168,14 @@ final class ConstraintTableTest {
             .build()});
 
         assertTrue(table.accepts(0, 0, 0L, 0L, 0L, 0L, 0L, 0L,
-            0L, 0L, 2, 2, 1L, 0x0011L, 0L, 0));
+            0L, 0L, 2, 2, CompiledShapeGeometry.prepareQuery(2, 2, 1L), 0x0011L, 0L, 0));
         assertFalse(table.accepts(0, 0, 0L, 0L, 0L, 0L, 0L, 0L,
-            0L, 0L, 2, 2, 1L, 0x0044L, 0L, 0));
+            0L, 0L, 2, 2, CompiledShapeGeometry.prepareQuery(2, 2, 1L), 0x0044L, 0L, 0));
+    }
+
+    private static Object field(ConstraintTable table, String name) throws Exception {
+        Field field = ConstraintTable.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(table);
     }
 }

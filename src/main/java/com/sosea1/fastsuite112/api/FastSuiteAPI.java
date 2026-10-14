@@ -23,10 +23,10 @@ import java.util.List;
  */
 public final class FastSuiteAPI {
     /**
-     * Public compatibility contract version. Version 3 adds conservative exact-class constraint
-     * providers while retaining the version 2 ordered all-match and legacy candidate surfaces.
+     * Public compatibility contract version. Version 4 adds a zero-list-allocation conflict probe
+     * and a bounded visitor overload while retaining all version 3 surfaces.
      */
-    public static final int API_VERSION = 3;
+    public static final int API_VERSION = 4;
 
     private FastSuiteAPI() {}
 
@@ -115,6 +115,14 @@ public final class FastSuiteAPI {
     }
 
     /**
+     * Return true as soon as two matching recipes exist. Intended for conflict indicators that do
+     * not need a materialized list of every match.
+     */
+    public static boolean hasMultipleMatchingRecipes(InventoryCrafting inventory, World world) {
+        return RecipeLookup.hasMultipleMatchingRecipes(inventory, world);
+    }
+
+    /**
      * Visit every matching recipe in exact registry order without allocating an intermediate
      * {@link java.util.List}. Return false from the visitor to stop after the current match.
      * The returned int is the number of matches delivered to the visitor.
@@ -124,13 +132,23 @@ public final class FastSuiteAPI {
     }
 
     /**
+     * Bounded visitor variant. Stops after {@code maxMatches} delivered matches even if the visitor
+     * keeps returning true. A zero limit performs no matching.
+     */
+    public static int visitMatchingRecipes(InventoryCrafting inventory,
+                                           World world,
+                                           int maxMatches,
+                                           RecipeMatchVisitor visitor) {
+        return RecipeLookup.visitMatchingRecipes(inventory, world, maxMatches, visitor);
+    }
+
+    /**
      * Current mutation generation. External caches may store this value and invalidate themselves
      * when it changes instead of guessing about CraftTweaker/OreDictionary lifecycle boundaries.
      */
     public static long getRecipeIndexGeneration() {
         return RecipeIndex.INSTANCE.getEpoch();
     }
-
 
     /** Public compatibility contract version for reflection-only optional integrations. */
     public static int getApiVersion() {

@@ -55,6 +55,30 @@ final class SortedIntUnionTest {
     }
 
     @Test
+    void manySimultaneouslyLiveIteratorsStayIndependent() {
+        int[][] buckets = {{1, 3, 5}, {2, 4, 6}};
+        int[] fallback = {0, 7};
+        List<PrimitiveIterator.OfInt> live = new ArrayList<PrimitiveIterator.OfInt>();
+
+        // Keep several iterators alive at once to model nested/reentrant lookup consumers.
+        for (int i = 0; i < 7; i++) {
+            PrimitiveIterator.OfInt iterator = SortedIntUnion.iterator(buckets, buckets.length, fallback);
+            assertEquals(0, iterator.nextInt());
+            live.add(iterator);
+        }
+
+        for (PrimitiveIterator.OfInt iterator : live) {
+            assertEquals(Arrays.asList(1, 2, 3, 4, 5, 6, 7), collect(iterator));
+        }
+
+        // A fresh iterator after those lookups must still start from an independent cursor state.
+        assertEquals(
+            Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7),
+            collect(SortedIntUnion.iterator(buckets, buckets.length, fallback))
+        );
+    }
+
+    @Test
     void repeatedHasNextDoesNotAdvancePastPrefetchedValue() {
         int[][] buckets = {{1, 3}, {2, 4}};
         PrimitiveIterator.OfInt iterator = SortedIntUnion.iterator(buckets, buckets.length, new int[] {0, 5});
@@ -68,6 +92,36 @@ final class SortedIntUnionTest {
         assertFalse(iterator.hasNext());
     }
 
+
+    @Test
+    void directFourSourcePathMergesWithoutSourceArrayDescriptor() {
+        PrimitiveIterator.OfInt iterator = SortedIntUnion.iterator(
+            new int[] {1, 5, 9},
+            new int[] {2, 5, 10},
+            new int[] {3, 8},
+            new int[] {4, 9, 11},
+            4,
+            new int[] {0, 6, 7, 12});
+
+        assertEquals(
+            Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+            collect(iterator)
+        );
+    }
+
+    @Test
+    void directPathIsIndependentAcrossRecursiveLookups() {
+        PrimitiveIterator.OfInt outer = SortedIntUnion.iterator(
+            new int[] {1, 4}, new int[] {2, 5}, new int[] {3, 6}, null, 3, new int[] {0, 7});
+        assertEquals(0, outer.nextInt());
+
+        assertEquals(
+            Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7),
+            collect(SortedIntUnion.iterator(
+                new int[] {1, 4}, new int[] {2, 5}, new int[] {3, 6}, null, 3, new int[] {0, 7}))
+        );
+        assertEquals(Arrays.asList(1, 2, 3, 4, 5, 6, 7), collect(outer));
+    }
 
     @Test
     void heapPathMergesManyMetadataStyleSources() {
@@ -85,6 +139,24 @@ final class SortedIntUnionTest {
                 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48),
             collect(SortedIntUnion.iterator(buckets, buckets.length, fallback))
         );
+    }
+
+    @Test
+    void heapScratchIsAlsoIndependentUnderRecursion() {
+        int[][] buckets = {
+            {0, 30}, {1, 31}, {2, 32}, {3, 33}, {4, 34},
+            {5, 35}, {6, 36}, {7, 37}, {8, 38}, {9, 39}
+        };
+        int[] fallback = {10, 40};
+
+        PrimitiveIterator.OfInt outer = SortedIntUnion.iterator(buckets, buckets.length, fallback);
+        assertEquals(0, outer.nextInt());
+        PrimitiveIterator.OfInt nested = SortedIntUnion.iterator(buckets, buckets.length, fallback);
+        assertEquals(0, nested.nextInt());
+        assertEquals(1, outer.nextInt());
+        assertEquals(1, nested.nextInt());
+        collect(nested);
+        collect(outer);
     }
 
     @Test

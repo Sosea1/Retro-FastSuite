@@ -61,17 +61,36 @@ public final class CommandFastSuiteDev extends CommandBase {
         if (sub.equals("fallback-hot")) {
             int limit = parseLimit(args, 20, "hot fallback group");
             FallbackMatchTelemetry.Snapshot snapshot = FallbackMatchTelemetry.INSTANCE.snapshot();
-            String summary = "[FastSuite fallback-hot] enabled=" + snapshot.enabled +
-                " | sampleEvery=" + snapshot.sampleEvery + " | groups=" + snapshot.groups.size();
+            RecipeIndex.FallbackDiagnostics staticDiagnostics = RecipeIndex.INSTANCE.getFallbackDiagnostics();
+            long sampledTotalNanos = 0L;
+            for (FallbackMatchTelemetry.Group group : snapshot.groups) {
+                sampledTotalNanos += group.totalNanos;
+            }
+            String summary = String.format(java.util.Locale.ROOT,
+                "[FastSuite fallback-hot] enabled=%s | sampleEvery=%d | groups=%d | sampledTotal=%.3f ms",
+                snapshot.enabled, snapshot.sampleEvery, snapshot.groups.size(), sampledTotalNanos / 1_000_000.0D);
             sender.sendMessage(new TextComponentString(summary));
             FastSuite112.LOGGER.info("[fallback-hot] {}", summary);
             int end = Math.min(limit, snapshot.groups.size());
             for (int i = 0; i < end; i++) {
                 FallbackMatchTelemetry.Group group = snapshot.groups.get(i);
+                int registryFallback = 0;
+                StringBuilder reasons = new StringBuilder();
+                for (RecipeIndex.FallbackGroup fallbackGroup : staticDiagnostics.groups) {
+                    if (!group.recipeClass.equals(fallbackGroup.recipeClass)) continue;
+                    registryFallback += fallbackGroup.count;
+                    if (reasons.indexOf(fallbackGroup.reason.name()) < 0) {
+                        if (reasons.length() > 0) reasons.append(',');
+                        reasons.append(fallbackGroup.reason.name());
+                    }
+                }
+                double share = sampledTotalNanos == 0L
+                    ? 0.0D
+                    : group.totalNanos * 100.0D / (double) sampledTotalNanos;
                 String line = String.format(java.util.Locale.ROOT,
-                    "[FastSuite fallback-hot] #%d calls=%d total=%.3f ms avg=%.3f us max=%.3f us failures=%d | %s",
-                    i + 1, group.calls, group.totalMillis(), group.averageMicros(), group.maxMicros(),
-                    group.failures, group.recipeClass);
+                    "[FastSuite fallback-hot] #%d calls=%d total=%.3f ms share=%.1f%% avg=%.3f us max=%.3f us failures=%d | registryFallback=%d reasons=%s | %s",
+                    i + 1, group.calls, group.totalMillis(), share, group.averageMicros(), group.maxMicros(),
+                    group.failures, registryFallback, reasons.length() == 0 ? "?" : reasons.toString(), group.recipeClass);
                 sender.sendMessage(new TextComponentString(line));
                 FastSuite112.LOGGER.info("[fallback-hot] {}", line);
             }

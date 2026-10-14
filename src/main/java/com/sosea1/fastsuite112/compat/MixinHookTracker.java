@@ -20,6 +20,9 @@ public final class MixinHookTracker {
     public static volatile boolean ingredientCacheFixApplied = false;
     public static volatile boolean ingredientCacheFixActive = false;
 
+    public static volatile boolean craftTweakerRefreshHookApplied = false;
+    public static volatile boolean craftTweakerRefreshHookActive = false;
+
     /**
      * Returns true if at least one crafting lookup hook (Vanilla CraftingManager or Universal Tweaks)
      * was transformed and applied to target classes.

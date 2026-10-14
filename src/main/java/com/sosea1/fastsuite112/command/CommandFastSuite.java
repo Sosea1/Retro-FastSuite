@@ -114,7 +114,10 @@ public final class CommandFastSuite extends CommandBase {
             "vanilla=" + MixinHookTracker.formatHookState(MixinHookTracker.vanillaCraftingHookApplied, MixinHookTracker.vanillaCraftingHookActive) +
             ", UT=" + MixinHookTracker.formatHookState(MixinHookTracker.universalTweaksHookApplied, MixinHookTracker.universalTweaksHookActive) +
             ", registry=" + MixinHookTracker.formatHookState(MixinHookTracker.forgeRegistryHookApplied, MixinHookTracker.forgeRegistryHookActive) +
-            ", ingredientFix=" + MixinHookTracker.formatHookState(MixinHookTracker.ingredientCacheFixApplied, MixinHookTracker.ingredientCacheFixActive)));
+            ", ingredientFix=" + MixinHookTracker.formatHookState(MixinHookTracker.ingredientCacheFixApplied, MixinHookTracker.ingredientCacheFixActive) +
+            ", CT-refresh=" + (compat.craftTweakerInstalled
+                ? MixinHookTracker.formatHookState(MixinHookTracker.craftTweakerRefreshHookApplied, MixinHookTracker.craftTweakerRefreshHookActive)
+                : "n/a")));
         sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "Candidate pruning: " + TextFormatting.WHITE +
             (FastSuiteConfig.advancedCandidatePruning ? "ON" : "OFF") + TextFormatting.GRAY +
             " (frequency-aware pivots=" + (FastSuiteConfig.frequencyAwarePivotSelection ? "ON" : "OFF") +
@@ -134,6 +137,10 @@ public final class CommandFastSuite extends CommandBase {
                 sender.sendMessage(new TextComponentString(TextFormatting.YELLOW +
                     "[FastSuite] Lookup hook is applied; waiting for first in-game crafting operation."));
             }
+        }
+        if (compat.craftTweakerInstalled && !MixinHookTracker.craftTweakerRefreshHookApplied) {
+            sender.sendMessage(new TextComponentString(TextFormatting.YELLOW +
+                "[FastSuite] CraftTweaker refresh checkpoint hook is unavailable; use /fastsuite rebuild after any external in-place recipe mutation."));
         }
     }
 

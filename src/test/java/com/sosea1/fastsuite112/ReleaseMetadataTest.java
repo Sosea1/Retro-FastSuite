@@ -37,6 +37,13 @@ final class ReleaseMetadataTest {
         assertTrue(license.contains("Copyright (c) 2026 FastSuite112 contributors"));
     }
 
+    @Test
+    void bundlesOptionalCraftTweakerCompatibilityMixinConfig() throws IOException {
+        String config = readResource("/mixins.fastsuite112.compat.crafttweaker.json");
+        assertTrue(config.contains("\"required\": false"));
+        assertTrue(config.contains("compat.CraftTweakerRecipeRefreshMixin"));
+    }
+
     private static String readResource(String path) throws IOException {
         InputStream stream = FastSuite112.class.getResourceAsStream(path);
         assertNotNull(stream, "Missing classpath resource: " + path);
