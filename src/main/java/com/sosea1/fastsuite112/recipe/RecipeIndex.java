@@ -139,6 +139,9 @@ public final class RecipeIndex {
         }
 
         RecipeBucket firstBucket = null;
+        int[] secondBucket = null;
+        int[] thirdBucket = null;
+        int[] fourthBucket = null;
         int[][] unionBuckets = null;
         int unionBucketCount = 0;
         int occupiedSlots = 0;
@@ -232,29 +235,52 @@ public final class RecipeIndex {
 
                 if (firstBucket == null) {
                     firstBucket = bucket;
+                    unionBucketCount = 1;
                     continue;
                 }
 
                 // Repeated slots (or duplicate routes) often resolve to the same immutable source.
-                if (bucket == firstBucket && unionBuckets == null) continue;
-
-                if (unionBuckets == null) {
-                    unionBuckets = new int[Math.max(4, inventorySize * 2)][];
-                    unionBuckets[unionBucketCount++] = firstBucket.ids;
+                // Keep up to four distinct bucket arrays in direct fields; this avoids allocating an
+                // int[][] descriptor for the common multi-bucket 2x2/3x3 lookup.
+                int[] bucketIds = bucket.ids;
+                if (bucketIds == firstBucket.ids
+                    || bucketIds == secondBucket
+                    || bucketIds == thirdBucket
+                    || bucketIds == fourthBucket) {
+                    continue;
                 }
 
-                boolean alreadyPresent = false;
-                for (int i = 0; i < unionBucketCount; i++) {
-                    if (unionBuckets[i] == bucket.ids) {
-                        alreadyPresent = true;
-                        break;
+                if (unionBuckets != null) {
+                    boolean alreadyPresent = false;
+                    for (int i = 4; i < unionBucketCount; i++) {
+                        if (unionBuckets[i] == bucketIds) {
+                            alreadyPresent = true;
+                            break;
+                        }
                     }
+                    if (alreadyPresent) continue;
+                    unionBuckets[unionBucketCount++] = bucketIds;
+                    continue;
                 }
-                if (!alreadyPresent) {
-                    if (unionBucketCount == unionBuckets.length) {
-                        unionBuckets = Arrays.copyOf(unionBuckets, unionBuckets.length + Math.max(4, unionBuckets.length / 2));
-                    }
-                    unionBuckets[unionBucketCount++] = bucket.ids;
+
+                if (unionBucketCount == 1) {
+                    secondBucket = bucketIds;
+                    unionBucketCount = 2;
+                } else if (unionBucketCount == 2) {
+                    thirdBucket = bucketIds;
+                    unionBucketCount = 3;
+                } else if (unionBucketCount == 3) {
+                    fourthBucket = bucketIds;
+                    unionBucketCount = 4;
+                } else {
+                    // At most two bucket sources can be discovered per occupied inventory slot, so
+                    // inventorySize * 2 is a strict upper bound and this array never needs to grow.
+                    unionBuckets = new int[Math.max(8, inventorySize * 2)][];
+                    unionBuckets[0] = firstBucket.ids;
+                    unionBuckets[1] = secondBucket;
+                    unionBuckets[2] = thirdBucket;
+                    unionBuckets[3] = fourthBucket;
+                    unionBuckets[unionBucketCount++] = bucketIds;
                 }
             }
         }
@@ -267,22 +293,30 @@ public final class RecipeIndex {
         final long queryMatchMaskB = queryItemMaskB | queryVariantMaskB;
 
         if (!advancedPruning) {
-            if (unionBuckets == null) {
+            if (unionBucketCount == 1) {
                 return snapshot.fallbackRecipeIds.length == 0
                     ? firstBucket
                     : new OrderedIdMergeIterable(snapshot.recipesById, firstBucket.ids, snapshot.fallbackRecipeIds);
             }
-            return new OrderedIdUnionIterable(
-                snapshot.recipesById,
-                unionBuckets,
-                unionBucketCount,
-                snapshot.fallbackRecipeIds
-            );
+            return unionBuckets == null
+                ? new OrderedIdUnionIterable(
+                    snapshot.recipesById,
+                    firstBucket.ids,
+                    secondBucket,
+                    thirdBucket,
+                    fourthBucket,
+                    unionBucketCount,
+                    snapshot.fallbackRecipeIds)
+                : new OrderedIdUnionIterable(
+                    snapshot.recipesById,
+                    unionBuckets,
+                    unionBucketCount,
+                    snapshot.fallbackRecipeIds);
         }
 
         final int queryGridWidth = shapeOccupancyNeeded && occupancyMaskValid ? gridWidth : 0;
         final int queryGridHeight = shapeOccupancyNeeded && occupancyMaskValid ? gridHeight : 0;
-        if (unionBuckets == null) {
+        if (unionBucketCount == 1) {
             return new FilteredSingleBucketIterable(
                 snapshot.recipesById,
                 firstBucket.ids,
@@ -306,28 +340,52 @@ public final class RecipeIndex {
             );
         }
 
-        return new FilteredOrderedIdUnionIterable(
-            snapshot.recipesById,
-            unionBuckets,
-            unionBucketCount,
-            snapshot.fallbackRecipeIds,
-            snapshot.constraints,
-            occupiedSlots,
-            queryMatchMaskA,
-            queryMatchMaskB,
-            queryItemMaskA,
-            queryItemMaskB,
-            queryVariantMaskA,
-            queryVariantMaskB,
-            queryCountSketchA,
-            queryCountSketchB,
-            queryGridWidth,
-            queryGridHeight,
-            queryOccupancyMask,
-            querySlotTokens0,
-            querySlotTokens1,
-            querySlotToken8
-        );
+        return unionBuckets == null
+            ? new FilteredOrderedIdUnionIterable(
+                snapshot.recipesById,
+                firstBucket.ids,
+                secondBucket,
+                thirdBucket,
+                fourthBucket,
+                unionBucketCount,
+                snapshot.fallbackRecipeIds,
+                snapshot.constraints,
+                occupiedSlots,
+                queryMatchMaskA,
+                queryMatchMaskB,
+                queryItemMaskA,
+                queryItemMaskB,
+                queryVariantMaskA,
+                queryVariantMaskB,
+                queryCountSketchA,
+                queryCountSketchB,
+                queryGridWidth,
+                queryGridHeight,
+                queryOccupancyMask,
+                querySlotTokens0,
+                querySlotTokens1,
+                querySlotToken8)
+            : new FilteredOrderedIdUnionIterable(
+                snapshot.recipesById,
+                unionBuckets,
+                unionBucketCount,
+                snapshot.fallbackRecipeIds,
+                snapshot.constraints,
+                occupiedSlots,
+                queryMatchMaskA,
+                queryMatchMaskB,
+                queryItemMaskA,
+                queryItemMaskB,
+                queryVariantMaskA,
+                queryVariantMaskB,
+                queryCountSketchA,
+                queryCountSketchB,
+                queryGridWidth,
+                queryGridHeight,
+                queryOccupancyMask,
+                querySlotTokens0,
+                querySlotTokens1,
+                querySlotToken8);
     }
 
     /** Ensure the lazy index snapshot has been rebuilt for the current registry generation. */
@@ -1147,15 +1205,40 @@ public final class RecipeIndex {
 
     private static final class OrderedIdUnionIterable implements Iterable<IRecipe> {
         private final IRecipe[] recipesById;
+        private final int[] indexedBucket0;
+        private final int[] indexedBucket1;
+        private final int[] indexedBucket2;
+        private final int[] indexedBucket3;
         private final int[][] indexedBuckets;
         private final int indexedBucketCount;
         private final int[] fallbackIds;
+
+        private OrderedIdUnionIterable(IRecipe[] recipesById,
+                                       int[] indexedBucket0,
+                                       int[] indexedBucket1,
+                                       int[] indexedBucket2,
+                                       int[] indexedBucket3,
+                                       int indexedBucketCount,
+                                       int[] fallbackIds) {
+            this.recipesById = recipesById;
+            this.indexedBucket0 = indexedBucket0;
+            this.indexedBucket1 = indexedBucket1;
+            this.indexedBucket2 = indexedBucket2;
+            this.indexedBucket3 = indexedBucket3;
+            this.indexedBuckets = null;
+            this.indexedBucketCount = indexedBucketCount;
+            this.fallbackIds = fallbackIds;
+        }
 
         private OrderedIdUnionIterable(IRecipe[] recipesById,
                                        int[][] indexedBuckets,
                                        int indexedBucketCount,
                                        int[] fallbackIds) {
             this.recipesById = recipesById;
+            this.indexedBucket0 = null;
+            this.indexedBucket1 = null;
+            this.indexedBucket2 = null;
+            this.indexedBucket3 = null;
             this.indexedBuckets = indexedBuckets;
             this.indexedBucketCount = indexedBucketCount;
             this.fallbackIds = fallbackIds;
@@ -1163,7 +1246,11 @@ public final class RecipeIndex {
 
         @Override
         public Iterator<IRecipe> iterator() {
-            final PrimitiveIterator.OfInt ids = SortedIntUnion.iterator(indexedBuckets, indexedBucketCount, fallbackIds);
+            final PrimitiveIterator.OfInt ids = indexedBuckets == null
+                ? SortedIntUnion.iterator(
+                    indexedBucket0, indexedBucket1, indexedBucket2, indexedBucket3,
+                    indexedBucketCount, fallbackIds)
+                : SortedIntUnion.iterator(indexedBuckets, indexedBucketCount, fallbackIds);
             return new Iterator<IRecipe>() {
                 @Override
                 public boolean hasNext() {
@@ -1318,6 +1405,10 @@ public final class RecipeIndex {
     /** Ordered k-way union plus fallback, filtered by immutable per-recipe necessary conditions. */
     private static final class FilteredOrderedIdUnionIterable implements Iterable<IRecipe> {
         private final IRecipe[] recipesById;
+        private final int[] indexedBucket0;
+        private final int[] indexedBucket1;
+        private final int[] indexedBucket2;
+        private final int[] indexedBucket3;
         private final int[][] indexedBuckets;
         private final int indexedBucketCount;
         private final int[] fallbackIds;
@@ -1337,6 +1428,55 @@ public final class RecipeIndex {
         private final long querySlotTokens0;
         private final long querySlotTokens1;
         private final int querySlotToken8;
+
+        private FilteredOrderedIdUnionIterable(IRecipe[] recipesById,
+                                               int[] indexedBucket0,
+                                               int[] indexedBucket1,
+                                               int[] indexedBucket2,
+                                               int[] indexedBucket3,
+                                               int indexedBucketCount,
+                                               int[] fallbackIds,
+                                               ConstraintTable constraints,
+                                               int occupiedSlots,
+                                               long queryMatchMaskA,
+                                               long queryMatchMaskB,
+                                               long queryItemMaskA,
+                                               long queryItemMaskB,
+                                               long queryVariantMaskA,
+                                               long queryVariantMaskB,
+                                               long queryCountSketchA,
+                                               long queryCountSketchB,
+                                               int queryGridWidth,
+                                               int queryGridHeight,
+                                               long queryOccupancyMask,
+                                               long querySlotTokens0,
+                                               long querySlotTokens1,
+                                               int querySlotToken8) {
+            this.recipesById = recipesById;
+            this.indexedBucket0 = indexedBucket0;
+            this.indexedBucket1 = indexedBucket1;
+            this.indexedBucket2 = indexedBucket2;
+            this.indexedBucket3 = indexedBucket3;
+            this.indexedBuckets = null;
+            this.indexedBucketCount = indexedBucketCount;
+            this.fallbackIds = fallbackIds;
+            this.constraints = constraints;
+            this.occupiedSlots = occupiedSlots;
+            this.queryMatchMaskA = queryMatchMaskA;
+            this.queryMatchMaskB = queryMatchMaskB;
+            this.queryItemMaskA = queryItemMaskA;
+            this.queryItemMaskB = queryItemMaskB;
+            this.queryVariantMaskA = queryVariantMaskA;
+            this.queryVariantMaskB = queryVariantMaskB;
+            this.queryCountSketchA = queryCountSketchA;
+            this.queryCountSketchB = queryCountSketchB;
+            this.queryGridWidth = queryGridWidth;
+            this.queryGridHeight = queryGridHeight;
+            this.queryOccupancyMask = queryOccupancyMask;
+            this.querySlotTokens0 = querySlotTokens0;
+            this.querySlotTokens1 = querySlotTokens1;
+            this.querySlotToken8 = querySlotToken8;
+        }
 
         private FilteredOrderedIdUnionIterable(IRecipe[] recipesById,
                                                int[][] indexedBuckets,
@@ -1359,6 +1499,10 @@ public final class RecipeIndex {
                                                long querySlotTokens1,
                                                int querySlotToken8) {
             this.recipesById = recipesById;
+            this.indexedBucket0 = null;
+            this.indexedBucket1 = null;
+            this.indexedBucket2 = null;
+            this.indexedBucket3 = null;
             this.indexedBuckets = indexedBuckets;
             this.indexedBucketCount = indexedBucketCount;
             this.fallbackIds = fallbackIds;
@@ -1382,7 +1526,11 @@ public final class RecipeIndex {
 
         @Override
         public Iterator<IRecipe> iterator() {
-            final PrimitiveIterator.OfInt ids = SortedIntUnion.iterator(indexedBuckets, indexedBucketCount, fallbackIds);
+            final PrimitiveIterator.OfInt ids = indexedBuckets == null
+                ? SortedIntUnion.iterator(
+                    indexedBucket0, indexedBucket1, indexedBucket2, indexedBucket3,
+                    indexedBucketCount, fallbackIds)
+                : SortedIntUnion.iterator(indexedBuckets, indexedBucketCount, fallbackIds);
             return new Iterator<IRecipe>() {
                 private int nextId;
                 private boolean prepared;

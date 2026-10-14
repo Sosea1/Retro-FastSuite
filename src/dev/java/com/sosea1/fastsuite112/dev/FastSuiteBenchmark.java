@@ -85,6 +85,11 @@ public final class FastSuiteBenchmark {
             sender.sendMessage(new TextComponentString(TextFormatting.GRAY +
                 "[FastSuite bench] Recipe registry: " + RecipeIndex.INSTANCE.getRecipeCount() +
                 ". UT/FastWorkbench result caches are bypassed intentionally."));
+            sender.sendMessage(new TextComponentString(TextFormatting.GRAY +
+                (created.allocationMeter.isAvailable()
+                    ? "[FastSuite bench] Per-thread allocation counter available; rows will include bytes/lookup."
+                    : "[FastSuite bench] Allocation counter unavailable (" +
+                        created.allocationMeter.getUnavailableReason() + "); timing still enabled.")));
         } catch (RuntimeException | LinkageError failure) {
             RUNNING.set(false);
             session = null;
@@ -140,9 +145,11 @@ public final class FastSuiteBenchmark {
         private final World world;
         private final BenchCase[] cases;
         private final double[][][] micros;
+        private final double[][][] allocatedBytesPerLookup;
         private final int[][] candidateCounts;
         private final boolean previousIndexedCrafting;
         private final long startedNanos;
+        private final ThreadAllocationMeter allocationMeter;
 
         private int caseIndex;
         private int workloadIndex;
@@ -150,6 +157,8 @@ public final class FastSuiteBenchmark {
         private int warmupDone;
         private int measuredDone;
         private long measuredNanos;
+        private long measuredAllocatedBytes;
+        private int measuredAllocationSamples;
         private boolean configRestored;
 
         private Session(Mode mode, ICommandSender sender, World world) {
@@ -160,7 +169,16 @@ public final class FastSuiteBenchmark {
             this.startedNanos = System.nanoTime();
             this.cases = createCases();
             this.micros = new double[cases.length][Workload.values().length][Backend.values().length];
+            this.allocatedBytesPerLookup = new double[cases.length][Workload.values().length][Backend.values().length];
             this.candidateCounts = new int[cases.length][3];
+            this.allocationMeter = ThreadAllocationMeter.createForCurrentThread();
+            if (!allocationMeter.isAvailable()) {
+                for (int c = 0; c < allocatedBytesPerLookup.length; c++) {
+                    for (int w = 0; w < allocatedBytesPerLookup[c].length; w++) {
+                        java.util.Arrays.fill(allocatedBytesPerLookup[c][w], -1.0D);
+                    }
+                }
+            }
 
             // Benchmark the index even if the user's normal config currently has it disabled.
             FastSuiteConfig.indexedCrafting = true;
@@ -189,17 +207,31 @@ public final class FastSuiteBenchmark {
                 }
 
                 if (measuredDone < mode.iterations) {
+                    long allocatedBefore = allocationMeter.isAvailable()
+                        ? allocationMeter.readAllocatedBytes()
+                        : -1L;
                     long start = System.nanoTime();
                     int result = runLookup(benchCase.grid, workload, backend);
                     long elapsed = System.nanoTime() - start;
+                    long allocatedAfter = allocatedBefore >= 0L
+                        ? allocationMeter.readAllocatedBytes()
+                        : -1L;
                     consume(result);
                     measuredNanos += elapsed;
+                    if (allocatedBefore >= 0L && allocatedAfter >= allocatedBefore) {
+                        measuredAllocatedBytes += allocatedAfter - allocatedBefore;
+                        measuredAllocationSamples++;
+                    }
                     measuredDone++;
                     continue;
                 }
 
                 micros[caseIndex][workloadIndex][backendIndex] =
                     measuredNanos / 1000.0D / (double) mode.iterations;
+                allocatedBytesPerLookup[caseIndex][workloadIndex][backendIndex] =
+                    measuredAllocationSamples == 0
+                        ? -1.0D
+                        : (double) measuredAllocatedBytes / (double) measuredAllocationSamples;
                 advancePhase();
             }
             return caseIndex >= cases.length;
@@ -209,6 +241,8 @@ public final class FastSuiteBenchmark {
             warmupDone = 0;
             measuredDone = 0;
             measuredNanos = 0L;
+            measuredAllocatedBytes = 0L;
+            measuredAllocationSamples = 0;
 
             backendIndex++;
             if (backendIndex < Backend.values().length) return;
@@ -346,13 +380,18 @@ public final class FastSuiteBenchmark {
         private void printRow(int index, Workload workload) {
             double indexed = micros[index][workload.ordinal()][Backend.INDEXED.ordinal()];
             double vanilla = micros[index][workload.ordinal()][Backend.VANILLA.ordinal()];
+            double indexedAllocated = allocatedBytesPerLookup[index][workload.ordinal()][Backend.INDEXED.ordinal()];
+            double vanillaAllocated = allocatedBytesPerLookup[index][workload.ordinal()][Backend.VANILLA.ordinal()];
             double speedup = indexed <= 0.0D ? 0.0D : vanilla / indexed;
             int candidateTotal = candidateCounts[index][0];
             int fallback = candidateCounts[index][2];
             int indexedCandidates = Math.max(0, candidateTotal - fallback);
+            String allocation = indexedAllocated < 0.0D || vanillaAllocated < 0.0D
+                ? " | alloc n/a"
+                : String.format(Locale.ROOT, " | alloc I/V %.1f / %.1f B/op", indexedAllocated, vanillaAllocated);
             String row = String.format(Locale.ROOT,
-                "%s: Indexed %.2f us | Vanilla %.2f us | %.2fx | candidates %,d = indexed %,d + fallback %,d / %,d",
-                cases[index].name, indexed, vanilla, speedup,
+                "%s: Indexed %.2f us | Vanilla %.2f us | %.2fx%s | candidates %,d = indexed %,d + fallback %,d / %,d",
+                cases[index].name, indexed, vanilla, speedup, allocation,
                 candidateTotal, indexedCandidates, fallback, candidateCounts[index][1]);
             send(row);
         }

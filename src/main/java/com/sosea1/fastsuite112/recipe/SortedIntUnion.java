@@ -15,6 +15,7 @@ import java.util.PrimitiveIterator;
  */
 final class SortedIntUnion {
     private static final int LINEAR_SOURCE_LIMIT = 8;
+    private static final int[] EMPTY = new int[0];
 
     private SortedIntUnion() {}
 
@@ -23,11 +24,143 @@ final class SortedIntUnion {
         if (sourceCount < 0 || sourceCount > sources.length) {
             throw new IllegalArgumentException("sourceCount out of bounds: " + sourceCount);
         }
-        final int[] extra = extraSortedSource == null ? new int[0] : extraSortedSource;
+        final int[] extra = extraSortedSource == null ? EMPTY : extraSortedSource;
         int totalSources = sourceCount + (extra.length == 0 ? 0 : 1);
         return totalSources <= LINEAR_SOURCE_LIMIT
             ? new LinearIterator(sources, sourceCount, extra)
             : heapIterator(sources, sourceCount, extra);
+    }
+
+
+    /**
+     * Array-free source descriptor for the common multi-bucket crafting path. RecipeIndex keeps the
+     * first four distinct immutable bucket arrays in local/direct fields and only materializes an
+     * {@code int[][]} when a query actually needs a fifth source. Keeping this overload here also
+     * means the returned iterator owns every cursor and is safe across recursive/short-circuited
+     * crafting lookups.
+     */
+    static PrimitiveIterator.OfInt iterator(int[] source0,
+                                            int[] source1,
+                                            int[] source2,
+                                            int[] source3,
+                                            int sourceCount,
+                                            int[] extraSortedSource) {
+        if (sourceCount < 0 || sourceCount > 4) {
+            throw new IllegalArgumentException("direct sourceCount out of bounds: " + sourceCount);
+        }
+        final int[] extra = extraSortedSource == null ? EMPTY : extraSortedSource;
+        return new DirectLinearIterator(source0, source1, source2, source3, sourceCount, extra);
+    }
+
+    private static final class DirectLinearIterator implements PrimitiveIterator.OfInt {
+        private final int[] source0;
+        private final int[] source1;
+        private final int[] source2;
+        private final int[] source3;
+        private final int sourceCount;
+        private final int[] extra;
+        private int p0, p1, p2, p3;
+        private int extraPosition;
+        private int nextValue;
+        private boolean prepared;
+        private boolean exhausted;
+
+        private DirectLinearIterator(int[] source0, int[] source1, int[] source2, int[] source3,
+                                     int sourceCount, int[] extra) {
+            this.source0 = source0;
+            this.source1 = source1;
+            this.source2 = source2;
+            this.source3 = source3;
+            this.sourceCount = sourceCount;
+            this.extra = extra;
+        }
+
+        @Override
+        public boolean hasNext() {
+            prepare();
+            return !exhausted;
+        }
+
+        @Override
+        public int nextInt() {
+            prepare();
+            if (exhausted) throw new NoSuchElementException();
+            int result = nextValue;
+            prepared = false;
+            return result;
+        }
+
+        private void prepare() {
+            if (prepared || exhausted) return;
+
+            int minimum = Integer.MAX_VALUE;
+            boolean found = false;
+            if (extraPosition < extra.length) {
+                minimum = extra[extraPosition];
+                found = true;
+            }
+
+            for (int i = 0; i < sourceCount; i++) {
+                int[] source = source(i);
+                int position = position(i);
+                if (source == null || position >= source.length) continue;
+                int value = source[position];
+                if (!found || value < minimum) {
+                    minimum = value;
+                    found = true;
+                }
+            }
+
+            if (!found) {
+                exhausted = true;
+                return;
+            }
+
+            for (int i = 0; i < sourceCount; i++) {
+                int[] source = source(i);
+                if (source == null) continue;
+                int position = position(i);
+                while (position < source.length && source[position] == minimum) position++;
+                setPosition(i, position);
+            }
+            while (extraPosition < extra.length && extra[extraPosition] == minimum) extraPosition++;
+
+            nextValue = minimum;
+            prepared = true;
+        }
+
+        private int[] source(int index) {
+            switch (index) {
+                case 0: return source0;
+                case 1: return source1;
+                case 2: return source2;
+                case 3: return source3;
+                default: throw new IllegalArgumentException("direct source out of range: " + index);
+            }
+        }
+
+        private int position(int source) {
+            switch (source) {
+                case 0: return p0;
+                case 1: return p1;
+                case 2: return p2;
+                case 3: return p3;
+                default: throw new IllegalArgumentException("direct source out of range: " + source);
+            }
+        }
+
+        private void setPosition(int source, int value) {
+            switch (source) {
+                case 0: p0 = value; return;
+                case 1: p1 = value; return;
+                case 2: p2 = value; return;
+                case 3: p3 = value; return;
+                default: throw new IllegalArgumentException("direct source out of range: " + source);
+            }
+        }
+
+        @Override public Integer next() { return nextInt(); }
+        @Override public void remove() { throw new UnsupportedOperationException("immutable sorted int union"); }
     }
 
     /**

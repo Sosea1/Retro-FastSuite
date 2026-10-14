@@ -92,6 +92,37 @@ final class SortedIntUnionTest {
         assertFalse(iterator.hasNext());
     }
 
+
+    @Test
+    void directFourSourcePathMergesWithoutSourceArrayDescriptor() {
+        PrimitiveIterator.OfInt iterator = SortedIntUnion.iterator(
+            new int[] {1, 5, 9},
+            new int[] {2, 5, 10},
+            new int[] {3, 8},
+            new int[] {4, 9, 11},
+            4,
+            new int[] {0, 6, 7, 12});
+
+        assertEquals(
+            Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+            collect(iterator)
+        );
+    }
+
+    @Test
+    void directPathIsIndependentAcrossRecursiveLookups() {
+        PrimitiveIterator.OfInt outer = SortedIntUnion.iterator(
+            new int[] {1, 4}, new int[] {2, 5}, new int[] {3, 6}, null, 3, new int[] {0, 7});
+        assertEquals(0, outer.nextInt());
+
+        assertEquals(
+            Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7),
+            collect(SortedIntUnion.iterator(
+                new int[] {1, 4}, new int[] {2, 5}, new int[] {3, 6}, null, 3, new int[] {0, 7}))
+        );
+        assertEquals(Arrays.asList(1, 2, 3, 4, 5, 6, 7), collect(outer));
+    }
+
     @Test
     void heapPathMergesManyMetadataStyleSources() {
         int[][] buckets = {
